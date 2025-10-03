@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>!mpacts</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Reset e Variáveis */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #ffffff;
+            --bg-color: #000000;
+            --accent-color: #00ff88;
+            --text-gray: #888888;
+            --animation-duration: 1.5s;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            cursor: none;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        /* VIDEO BACKGROUND - SIMPLIFICADO AO MÁXIMO */
+        #bgVideo {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            transform: translate(-50%, -50%);
+            z-index: -100;
+            opacity: 1.00;
+            
+            filter: blur(9px);
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                rgba(0, 0, 0, 0.3) 50%,
+                rgba(0, 0, 0, 0.7) 100%
+            );
+            pointer-events: none;
+            z-index: -9;
+        }
+
+        /* Fabric/Mesh Layer */
+        .fabric-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -8;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            opacity: 0.15;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(255, 255, 255, 0.03) 3px,
+                    rgba(255, 255, 255, 0.03) 6px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(255, 255, 255, 0.03) 3px,
+                    rgba(255, 255, 255, 0.03) 6px
+                );
+            animation: fabricWave 20s ease-in-out infinite;
+        }
+
+        @keyframes fabricWave {
+            0%, 100% { 
+                transform: perspective(500px) rotateX(0deg) scale(1);
+                opacity: 0.15;
+            }
+            25% { 
+                transform: perspective(500px) rotateX(0.5deg) scale(1.01);
+                opacity: 0.2;
+            }
+            50% { 
+                transform: perspective(500px) rotateX(-0.5deg) scale(1.02);
+                opacity: 0.25;
+            }
+            75% { 
+                transform: perspective(500px) rotateX(0.3deg) scale(1.01);
+                opacity: 0.18;
+            }
+        }
+
+        /* Main wrapper para conteúdo */
+        .main-wrapper {
+            position: relative;
+            min-height: 100vh;
+            z-index: 1;
+        }
+
+        /* Scramble Text Animation Styles */
+        .scramble-text {
+            display: inline-block;
+            position: relative;
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            min-width: fit-content;
+        }
+
+        .scramble-text.animating {
+            animation: scrambleGlitch 0.3s infinite;
+        }
+
+        .meteor-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 10000;
+            mix-blend-mode: screen;
+        }
+
+        .intro-content h3 {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: #ffffff;
+            font-size: 16px;
+            z-index: 1000;
+        }
+        
+        .meteor-core {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, 
+                rgba(255, 255, 255, 1) 0%, 
+                rgba(255, 200, 100, 0.8) 30%, 
+                rgba(255, 150, 0, 0.4) 60%, 
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(0.5px);
+            box-shadow: 
+                0 0 10px rgba(255, 200, 100, 0.8),
+                0 0 20px rgba(255, 150, 0, 0.6),
+                0 0 30px rgba(255, 100, 0, 0.4);
+            animation: pulseMeteor 0.5s infinite alternate;
+        }
+        
+        @keyframes pulseMeteor {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.2); }
+        }
+        
+        /* Rastro do meteoro */
+        .meteor-trail {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        
+        .trail-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: radial-gradient(circle, 
+                rgba(255, 200, 100, 1) 0%, 
+                rgba(255, 150, 0, 0.6) 50%, 
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(1px);
+            animation: fadeTrail 1s ease-out forwards;
+        }
+        
+        @keyframes fadeTrail {
+            0% {
+                opacity: 1;
+                transform: scale(1) translate(0, 0);
+                filter: blur(0px) brightness(1.5);
+            }
+            50% {
+                opacity: 0.5;
+                filter: blur(1px) brightness(1.2);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.2) translate(random(-10px, 10px), random(-10px, 10px));
+                filter: blur(2px) brightness(0.8);
+            }
+        }
+        
+        /* Explosão ao clicar */
+        .meteor-explosion {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9998;
+        }
+        
+        .explosion-particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: radial-gradient(circle,
+                rgba(255, 255, 255, 1) 0%,
+                rgba(255, 200, 100, 0.9) 20%,
+                rgba(255, 150, 0, 0.7) 50%,
+                rgba(255, 100, 0, 0.4) 80%,
+                transparent 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(255, 200, 100, 0.9);
+        }
+        
+        .explosion-ring {
+            position: absolute;
+            border: 2px solid rgba(255, 200, 100, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: expandRing 0.8s ease-out forwards;
+        }
+        
+        @keyframes expandRing {
+            0% {
+                width: 20px;
+                height: 20px;
+                opacity: 1;
+                box-shadow: 
+                    0 0 10px rgba(255, 200, 100, 0.8),
+                    inset 0 0 10px rgba(255, 150, 0, 0.6);
+            }
+            100% {
+                width: 150px;
+                height: 150px;
+                opacity: 0;
+                box-shadow: 
+                    0 0 30px rgba(255, 200, 100, 0.2),
+                    inset 0 0 30px rgba(255, 150, 0, 0.1);
+            }
+        }
+        
+        /* Flash de luz */
+        .explosion-flash {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle,
+                rgba(255, 255, 255, 0.9) 0%,
+                rgba(255, 200, 100, 0.4) 30%,
+                transparent 70%);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: flash 0.3s ease-out forwards;
+        }
+        
+        @keyframes flash {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(0);
+            }
+            50% {
+                opacity: 0.8;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(1.5);
+            }
+        }
+
+        @keyframes scrambleGlitch {
+            0%, 100% {
+                text-shadow: 
+                    0.05em 0 0 rgba(255, 0, 0, 0.75),
+                    -0.05em -0.025em 0 rgba(0, 255, 0, 0.75),
+                    0.025em 0.05em 0 rgba(0, 0, 255, 0.75);
+            }
+            14% {
+                text-shadow: 
+                    0.05em 0 0 rgba(255, 0, 0, 0.75),
+                    -0.05em -0.025em 0 rgba(0, 255, 0, 0.75),
+                    0.025em 0.05em 0 rgba(0, 0, 255, 0.75);
+            }
+            15% {
+                text-shadow: 
+                    -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
+                    0.025em 0.025em 0 rgba(0, 255, 0, 0.75),
+                    -0.05em -0.05em 0 rgba(0, 0, 255, 0.75);
+            }
+        }
+
+        .scramble-hover {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .scramble-hover.scrambling {
+            text-shadow: 
+                0 0 5px rgba(0, 255, 255, 0.8),
+                0 0 10px rgba(0, 255, 255, 0.4);
+        }
+
+
+
+        @keyframes starMove {
+            0% {
+                transform: translateY(-100vh) translateX(0);
+                opacity: 0;
+            }
+            5% {
+                opacity: 1;
+            }
+            95% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) translateX(-50px);
+                opacity: 0;
+            }
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 20px 40px;
+            animation: slideDown 0.8s ease-out;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            color: var(--primary-color);
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+        }
+
+        .nav-list {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+
+        .nav-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: opacity 0.3s;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            opacity: 0.7;
+        }
+
+        /* Seção Hero */
+        .intro-section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: radial-gradient(circle at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+            z-index: 2;
+        }
+
+        .intro-content {
+            text-align: center;
+            max-width: 900px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 3;
+        }
+
+        .intro-heading {
+            font-size: clamp(2rem, 6vw, 4.5rem);
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 30px;
+            letter-spacing: -2px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .intro-heading-line {
+            display: block;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        /* Parágrafo */
+        .intro-paragraph {
+            font-size: 18px;
+            line-height: 1.6;
+            color: #fdfdfd;
+            margin-bottom: 40px;
+            opacity: 0;
+            animation: fadeInUp 1s 1.5s forwards;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Botão Hero */
+        .hero-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 40px;
+            background: transparent;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 1.5s ease;
+            opacity: 0;
+            animation: fadeInUp 5s 5s forwards;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+        }
+
+        .hero-button:hover {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .hero-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .hero-button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .eye-icon {
+            width: 40px;
+            height: 40px;
+            transform: scaleX(-1);
+        }
+
+        /* Canvas dos meteoros */
+        #meteors-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 5; /* Aumentado para ficar acima do conteúdo mas não interferir */
+            pointer-events: none;
+            background: transparent; /* Garantir transparência */
+        }
+
+        /* Animações gerais */
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Overlay de background */
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% {
+                opacity: 0.3;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        /* Menu móvel */
+        .menu-button {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .hamburger {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hamburger span {
+            width: 24px;
+            height: 2px;
+            background: var(--primary-color);
+            transition: all 0.3s;
+        }
+
+        /* DEBUG - Botão para testar vídeo */
+        .debug-video {
+            position: fixed;
+            bottom: 60px;
+            left: 20px;
+            z-index: 10000;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            display: none; /* Mostrar apenas para debug */
+        }
+
+        /* Responsivo */
+        @media (max-width: 768px) {
+            .header {
+                padding: 15px 20px;
+            }
+
+            .nav-list {
+                display: none;
+            }
+
+            .menu-button {
+                display: block;
+            }
+
+            .intro-heading {
+                font-size: clamp(1.8rem, 8vw, 3rem);
+            }
+
+            .intro-paragraph {
+                font-size: 16px;
+            }
+
+            .hero-button {
+                padding: 14px 30px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- VIDEO BACKGROUND - ULTRA SIMPLIFICADO -->
+    <video id="bgVideo" autoplay muted loop playsinline>
+        <source src="st1.mp4" type="video/mp4">
+    </video>
+    
+    <div class="video-overlay"></div>
+
+    <!-- FABRIC LAYER -->
+    <div class="fabric-layer"></div>
+
+    <!-- Main wrapper -->
+    <div class="main-wrapper">
+        <!-- Background Overlay -->
+        <div class="bg-overlay"></div>
+        
+        <canvas id="meteors-canvas"></canvas>
+        
+        <!-- Header -->
+        <header class="header">
+            <nav class="nav">
+                <a href="/" class="logo">
+                    <span href="index.html" class="scramble-hover" data-text="!mpact">!mpacts</span>
+                </a>
+        
+
+                <button class="menu-button" aria-label="Menu">
+                    <div class="hamburger">
+                        <span></span>
+                        <span></span>
+                    </div>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <section class="intro-section">
+                <div class="intro-content">
+                    <h2 class="intro-heading">
+                        <span class="intro-heading-line">
+                            <span class="scramble-text" data-text="!mpacts">!mpacts</span>
+                            
+                        </span>
+                    </h2>
+
+                    <p class="intro-paragraph">
+                        <span class="scramble-text" data-text='A newly identified near-Earth asteroid, "Impactor-2025"'>A newly identified near-Earth asteroid, "Impactor-2025"</span>
+                    </p>
+
+                    <a href="./story.html" class="hero-button">
+                        <span>COMPLETE JOURNEY</span>
+                    </a>
+
+                    
+                    <a href="./dashboard.html" class="hero-button">
+                        <span>REDUCED JOURNEY</span>
+                    </a>
+
+                    <h3>Click on the screen to generate !mpacts</h3>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Botão de debug (remover em produção) -->
+    <div class="debug-video" onclick="debugVideo()">Debug Video</div>
+
+    <!-- Script completamente reformulado e com debug -->
+    <script>
+        // DEBUG E FIX DO VÍDEO
+        window.addEventListener('load', function() {
+            const video = document.getElementById('bgVideo');
+            
+            if (!video) {
+                console.error('Elemento de vídeo não encontrado!');
+                return;
+            }
+            
+            // Configurações forçadas
+            video.setAttribute('autoplay', '');
+            video.setAttribute('muted', '');
+            video.setAttribute('loop', '');
+            video.setAttribute('playsinline', '');
+            video.muted = true;
+            video.loop = true;
+            video.autoplay = true;
+            
+            // Função para forçar play
+            function forcePlay() {
+                const playPromise = video.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('✅ Vídeo reproduzindo!');
+                        console.log('Dimensões:', {
+                            naturalWidth: video.videoWidth,
+                            naturalHeight: video.videoHeight,
+                            displayWidth: video.offsetWidth,
+                            displayHeight: video.offsetHeight
+                        });
+                    }).catch(error => {
+                        console.error('❌ Erro ao reproduzir:', error);
+                        // Tentar novamente após interação
+                        document.addEventListener('click', () => {
+                            video.play();
+                        }, { once: true });
+                    });
+                }
+            }
+            
+            // Forçar carregamento e play
+            video.load();
+            
+            // Múltiplas tentativas em diferentes momentos
+            forcePlay();
+            video.addEventListener('loadedmetadata', forcePlay);
+            video.addEventListener('canplay', forcePlay);
+            
+            // Verificar periodicamente se o vídeo parou
+            setInterval(() => {
+                if (video.paused) {
+                    console.log('⚠️ Vídeo pausado, tentando reiniciar...');
+                    forcePlay();
+                }
+            }, 2000);
+            
+            // Debug completo ao pressionar D
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'd' || e.key === 'D') {
+                    console.log('=== DEBUG DO VÍDEO ===');
+                    console.log('Elemento existe:', !!video);
+                    console.log('Src:', video.src);
+                    console.log('Current src:', video.currentSrc);
+                    console.log('Ready state:', video.readyState);
+                    console.log('Pausado:', video.paused);
+                    console.log('Muted:', video.muted);
+                    console.log('Volume:', video.volume);
+                    console.log('Current time:', video.currentTime);
+                    console.log('Duration:', video.duration);
+                    console.log('Dimensões naturais:', video.videoWidth, 'x', video.videoHeight);
+                    console.log('Dimensões display:', video.offsetWidth, 'x', video.offsetHeight);
+                    console.log('Position:', getComputedStyle(video).position);
+                    console.log('Z-index:', getComputedStyle(video).zIndex);
+                    console.log('Opacity:', getComputedStyle(video).opacity);
+                    console.log('Display:', getComputedStyle(video).display);
+                    console.log('Visibility:', getComputedStyle(video).visibility);
+                    console.log('=====================');
+                }
+            });
+            
+            console.log('🎬 Sistema de vídeo iniciado. Pressione D para debug.');
+        });
+    </script>
+
+    <script>
+        // ========== TYPEWRITER SCRAMBLE ANIMATION ==========
+        const RANDOM_CHARS = '!%$#@*ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        
+        // Configurações
+        const CONFIG = {
+            typeSpeed: 0,
+            scrambleTime: 100,
+            changeRate: 30,
+            autoRepeat: 10000,
+            cascadeDelay: 300
+        };
+        
+        class TypewriterScramble {
+            constructor(element) {
+                this.element = element;
+                this.originalText = element.getAttribute('data-text') || element.textContent;
+                this.currentText = '';
+                this.position = 0;
+                this.intervals = [];
+                this.timeouts = [];
+                this.isAnimating = false;
+                
+                setTimeout(() => this.animate(), 100);
+            }
+            
+            getRandomChar() {
+                return RANDOM_CHARS[Math.floor(Math.random() * RANDOM_CHARS.length)];
+            }
+            
+            async animate() {
+                if (this.isAnimating) return;
+                
+                this.isAnimating = true;
+                this.reset();
+                this.element.textContent = '';
+                this.currentText = '';
+                this.position = 0;
+                
+                this.element.classList.add('animating');
+                
+                for (let i = 0; i < this.originalText.length; i++) {
+                    await this.addCharacter(i);
+                    await this.wait(CONFIG.typeSpeed);
+                }
+                
+                setTimeout(() => {
+                    this.element.classList.remove('animating');
+                    this.isAnimating = false;
+                }, 500);
+            }
+            
+            addCharacter(index) {
+                return new Promise((resolve) => {
+                    this.currentText += this.getRandomChar();
+                    this.element.textContent = this.currentText;
+                    
+                    const interval = setInterval(() => {
+                        const chars = this.currentText.split('');
+                        chars[index] = this.getRandomChar();
+                        this.currentText = chars.join('');
+                        this.element.textContent = this.currentText;
+                    }, CONFIG.changeRate);
+                    
+                    this.intervals.push(interval);
+                    
+                    const timeout = setTimeout(() => {
+                        clearInterval(interval);
+                        const chars = this.currentText.split('');
+                        chars[index] = this.originalText[index];
+                        this.currentText = chars.join('');
+                        this.element.textContent = this.currentText;
+                        resolve();
+                    }, CONFIG.scrambleTime);
+                    
+                    this.timeouts.push(timeout);
+                });
+            }
+            
+            wait(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+            
+            stop() {
+                this.intervals.forEach(interval => clearInterval(interval));
+                this.timeouts.forEach(timeout => clearTimeout(timeout));
+                this.intervals = [];
+                this.timeouts = [];
+                this.isAnimating = false;
+                this.element.classList.remove('animating');
+            }
+            
+            reset() {
+                this.stop();
+                this.currentText = '';
+                this.position = 0;
+            }
+            
+            trigger() {
+                if (!this.isAnimating) {
+                    this.animate();
+                }
+            }
+        }
+        
+        // ========== INICIALIZAÇÃO ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            const animations = [];
+            
+            const elements = document.querySelectorAll('.scramble-text');
+            elements.forEach((element, index) => {
+                if (!element.getAttribute('data-text')) {
+                    element.setAttribute('data-text', element.textContent);
+                }
+                
+                setTimeout(() => {
+                    const instance = new TypewriterScramble(element);
+                    animations.push(instance);
+                }, index * CONFIG.cascadeDelay);
+            });
+            
+            window.triggerScramble = function() {
+                animations.forEach((instance, index) => {
+                    setTimeout(() => {
+                        instance.trigger();
+                    }, index * CONFIG.cascadeDelay);
+                });
+            };
+            
+            setInterval(() => {
+                if (!animations.some(a => a.isAnimating)) {
+                    window.triggerScramble();
+                }
+            }, CONFIG.autoRepeat);
+            
+            console.log('%c🚀 !MPACT LOADED', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+        });
+    </script>
+
+    <!-- ========== METEOR ANIMATION ========== -->
+    <script>
+    (() => {
+    const canvas = document.getElementById('meteors-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let dpr = Math.max(1, window.devicePixelRatio || 1);
+    function resize() {
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+        canvas.width  = Math.floor(innerWidth * dpr);
+        canvas.height = Math.floor(innerHeight * dpr);
+        canvas.style.width  = innerWidth + 'px';
+        canvas.style.height = innerHeight + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    addEventListener('resize', resize, { passive: true });
+    resize();
+
+    const meteors   = [];
+    const particles = [];
+
+    let lastSpawn   = 0;
+    const spawnDelay = 3000;
+    const maxMeteors = 5;
+
+    const rand = (a, b) => Math.random() * (b - a) + a;
+
+    function spawnMeteor() {
+        if (meteors.length >= maxMeteors) return;
+
+        const w = innerWidth, h = innerHeight;
+        const startSide = Math.random() < 0.5 ? 'left' : 'top';
+
+        let x0, y0, x1, y1;
+        if (startSide === 'left') {
+        x0 = -50;
+        y0 = Math.random() * h * 0.5;
+        x1 = w + 50;
+        y1 = y0 + Math.random() * h * 0.3;
+        } else {
+        x0 = Math.random() * w;
+        y0 = -50;
+        x1 = x0 + (Math.random() - 0.5) * w * 0.5;
+        y1 = h + 50;
+        }
+
+        meteors.push({
+        x0, y0, x1, y1,
+        progress: 0,
+        speed: 0.5 + Math.random() * 1.5,
+        size: 2 + Math.random() * 3,
+        trail: []
+        });
+    }
+
+    function drawMeteor(m) {
+        m.progress += m.speed * 0.01;
+        if (m.progress > 1) return true;
+
+        const x = m.x0 + (m.x1 - m.x0) * m.progress;
+        const y = m.y0 + (m.y1 - m.y0) * m.progress;
+
+        m.trail.push({ x, y, opacity: 1 });
+        if (m.trail.length > 20) m.trail.shift();
+
+        // Atualizar opacidade do rastro
+        for (let i = 0; i < m.trail.length; i++) {
+            m.trail[i].opacity *= 0.95; // Fade gradual
+        }
+
+        // Desenhar rastro com fade
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < m.trail.length; i++) {
+        const p = m.trail[i];
+        ctx.globalAlpha = p.opacity * 0.5;
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        const g = ctx.createRadialGradient(x, y, 0, x, y, m.size);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.5, 'rgba(255,200,100,0.5)');
+        g.addColorStop(1, 'rgba(255,100,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, m.size, 0, Math.PI *2);
+        ctx.fill();
+
+        if (Math.random() < 0.1) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            life: 1,
+            size: Math.random() * 2
+        });
+        }
+
+        return false;
+    }
+
+    function drawParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+
+        ctx.fillStyle = `rgba(255, 200, 100, ${p.life * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) lastSpawn = performance.now();
+    });
+
+    function animate(ts) {
+        if (!document.hidden && (ts - lastSpawn >= spawnDelay)) {
+        spawnMeteor();
+        lastSpawn = ts;
+        }
+
+        // CORREÇÃO: Limpar o canvas de forma transparente, não com preto
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+        for (let i = meteors.length - 1; i >= 0; i--) {
+        if (drawMeteor(meteors[i])) meteors.splice(i, 1);
+        }
+
+        drawParticles();
+
+        requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+    })();
+    </script>
+
+    <script>
+    class ScrambleHover {
+        constructor() {
+            this.defaultChars = '!#$%&*ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            
+            this.defaultConfig = {
+                duration: 500,
+                speed: 60,
+                selector: '.scramble-hover'
+            };
+            
+            this.activeInstances = new Map();
+            this.init();
+        }
+        
+        init() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => this.setupElements());
+            } else {
+                this.setupElements();
+            }
+        }
+        
+        setupElements() {
+            const elements = document.querySelectorAll(this.defaultConfig.selector);
+            
+            elements.forEach(element => {
+                this.attachToElement(element);
+            });
+        }
+        
+        attachToElement(element) {
+            const originalText = element.textContent;
+            element.setAttribute('data-original-text', originalText);
+            
+            element.addEventListener('mouseenter', (e) => this.handleMouseEnter(e));
+            element.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
+        }
+        
+        handleMouseEnter(event) {
+            const element = event.target;
+            
+            if (this.activeInstances.has(element)) {
+                return;
+            }
+            
+            const config = this.getElementConfig(element);
+            const originalText = element.getAttribute('data-original-text');
+            const targetText = element.getAttribute('data-scramble-text') || originalText;
+            const chars = element.getAttribute('data-scramble-chars') || this.defaultChars;
+            
+            element.classList.add('scrambling');
+            
+            this.scrambleText(element, originalText, targetText, config, chars);
+        }
+        
+        handleMouseLeave(event) {
+            const element = event.target;
+            
+            if (this.activeInstances.has(element)) {
+                const instance = this.activeInstances.get(element);
+                clearInterval(instance.interval);
+                clearTimeout(instance.timeout);
+                this.activeInstances.delete(element);
+            }
+            
+            const originalText = element.getAttribute('data-original-text');
+            element.textContent = originalText;
+            element.classList.remove('scrambling');
+        }
+        
+        scrambleText(element, originalText, targetText, config, chars) {
+            let currentText = originalText;
+            let iteration = 0;
+            const maxIterations = config.duration / config.speed;
+            
+            const interval = setInterval(() => {
+                let scrambled = '';
+                for (let i = 0; i < targetText.length; i++) {
+                    const progress = iteration / maxIterations;
+                    if (Math.random() < progress && iteration > maxIterations * 0.5) {
+                        scrambled += targetText[i];
+                    } else {
+                        scrambled += this.getRandomChar(chars);
+                    }
+                }
+                
+                element.textContent = scrambled;
+                iteration++;
+                
+                if (iteration >= maxIterations) {
+                    clearInterval(interval);
+                    element.textContent = targetText;
+                    
+                    const timeout = setTimeout(() => {
+                        this.activeInstances.delete(element);
+                    }, 100);
+                    
+                    this.activeInstances.set(element, { interval: null, timeout });
+                }
+            }, config.speed);
+            
+            this.activeInstances.set(element, { interval, timeout: null });
+        }
+        
+        getRandomChar(chars) {
+            return chars[Math.floor(Math.random() * chars.length)];
+        }
+        
+        getElementConfig(element) {
+            const duration = parseInt(element.getAttribute('data-scramble-duration')) || this.defaultConfig.duration;
+            const speed = parseInt(element.getAttribute('data-scramble-speed')) || this.defaultConfig.speed;
+            
+            return { duration, speed };
+        }
+        
+        add(elements) {
+            if (typeof elements === 'string') {
+                elements = document.querySelectorAll(elements);
+            } else if (elements instanceof HTMLElement) {
+                elements = [elements];
+            }
+            
+            elements.forEach(element => {
+                element.classList.add('scramble-hover');
+                this.attachToElement(element);
+            });
+        }
+        
+        remove(elements) {
+            if (typeof elements === 'string') {
+                elements = document.querySelectorAll(elements);
+            } else if (elements instanceof HTMLElement) {
+                elements = [elements];
+            }
+            
+            elements.forEach(element => {
+                element.classList.remove('scramble-hover');
+            });
+        }
+    }
+    
+    const scrambleHover = new ScrambleHover();
+    
+    window.ScrambleHover = ScrambleHover;
+    window.scrambleHover = scrambleHover;
+    </script>
+
+    <script>
+    class MeteorCursor {
+    constructor() {
+        this.canvas = document.getElementById('meteors-canvas');
+        this.ctx    = this.canvas ? this.canvas.getContext('2d') : null;
+        if (!this.canvas || !this.ctx) return;
+
+        this.maxPath      = 8;
+        this.maxLengthPx  = 90;
+        this.IDLE_MS      = 1000;
+
+        this.cursorEl = null;
+        this.path = [];
+        this.particles = [];
+        this.lastX = 0;
+        this.lastY = 0;
+        this.vel   = { x: 0, y: 0 };
+        this.lastMoveTs = performance.now();
+
+        this.createCursor();
+        this.bindEvents();
+        this.animate();
+    }
+
+    createCursor() {
+        this.cursorEl = document.createElement('div');
+        this.cursorEl.className = 'meteor-cursor';
+        const core = document.createElement('div');
+        core.className = 'meteor-core';
+        this.cursorEl.appendChild(core);
+        document.body.appendChild(this.cursorEl);
+    }
+
+    bindEvents() {
+        document.addEventListener('mousemove', (e) => this.onMove(e));
+        document.addEventListener('mousedown', (e) => this.onClick(e));
+        document.addEventListener('mouseleave', () => { this.hide(); this.clearTrail(); });
+        document.addEventListener('mouseenter', () => this.show());
+    }
+
+    onMove(e) {
+        const x = e.clientX, y = e.clientY;
+        this.lastMoveTs = performance.now();
+
+        this.vel.x = x - this.lastX;
+        this.vel.y = y - this.lastY;
+
+        this.cursorEl.style.left = (x - 10) + 'px';
+        this.cursorEl.style.top  = (y - 10) + 'px';
+
+        this.path.push({ x, y });
+        this.enforceMaxLength();
+
+        const speed = Math.hypot(this.vel.x, this.vel.y);
+        if (speed > 0.5 && Math.random() < 0.35) {
+        this.particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            life: 1,
+            size: Math.random() * 2
+        });
+        }
+
+        this.lastX = x;
+        this.lastY = y;
+    }
+
+    enforceMaxLength() {
+        let total = 0;
+        for (let i = this.path.length - 1; i > 0; i--) {
+        const a = this.path[i], b = this.path[i - 1];
+        total += Math.hypot(a.x - b.x, a.y - b.y);
+        if (total > this.maxLengthPx) {
+            this.path = this.path.slice(i);
+            break;
+        }
+        }
+        if (this.path.length > this.maxPath) {
+        this.path = this.path.slice(-this.maxPath);
+        }
+    }
+
+    onClick(e) { this.createExplosion(e.clientX, e.clientY); }
+
+    createExplosion(x, y) {
+        const explosion = document.createElement('div');
+        explosion.className = 'meteor-explosion';
+        explosion.style.left = x + 'px';
+        explosion.style.top  = y + 'px';
+
+        const flash = document.createElement('div');
+        flash.className = 'explosion-flash';
+        explosion.appendChild(flash);
+
+        for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+            const ring = document.createElement('div');
+            ring.className = 'explosion-ring';
+            explosion.appendChild(ring);
+        }, i * 100);
+        }
+
+        const N = 20;
+        for (let i = 0; i < N; i++) {
+        const p = document.createElement('div');
+        p.className = 'explosion-particle';
+        const ang = (Math.PI * 2 * i) / N + (Math.random() - 0.5) * 0.5;
+        const vel = 50 + Math.random() * 100;
+        const size = 3 + Math.random() * 4;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        const dur = 0.5 + Math.random() * 0.5;
+        const dx = Math.cos(ang) * vel;
+        const dy = Math.sin(ang) * vel;
+        p.style.transition = `all ${dur}s ease-out`;
+        explosion.appendChild(p);
+        requestAnimationFrame(() => {
+            p.style.transform = `translate(${dx}px, ${dy}px) scale(0)`;
+            p.style.opacity = '0';
+        });
+        }
+
+        document.body.appendChild(explosion);
+        setTimeout(() => explosion.remove(), 1000);
+    }
+
+    hide() { if (this.cursorEl) this.cursorEl.style.display = 'none'; }
+    show() { if (this.cursorEl) this.cursorEl.style.display = 'block'; }
+
+    clearTrail(soft = false) {
+      if (!this.path.length && !this.particles.length) return;
+
+      const ctx = this.ctx;
+
+      if (this.path.length > 1) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = 12;
+        ctx.lineJoin = 'round';
+        ctx.lineCap  = 'round';
+        ctx.beginPath();
+        ctx.moveTo(this.path[0].x, this.path[0].y);
+        for (let i = 1; i < this.path.length; i++) {
+          ctx.lineTo(this.path[i].x, this.path[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      this.particles = [];
+      this.path = [];
+    }
+
+    drawTrail() {
+        const ctx = this.ctx, trail = this.path;
+        if (trail.length < 2) return;
+
+        ctx.save();
+        ctx.lineWidth = 1;
+        for (let i = 1; i < trail.length; i++) {
+        const a = trail[i - 1], b = trail[i];
+        const life = i / trail.length;
+        ctx.globalAlpha = life * 0.8;
+
+        const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        grad.addColorStop(0, `hsla(45,100%,90%,${life})`);
+        grad.addColorStop(1, `hsla(70,100%,60%,${life})`);
+        ctx.strokeStyle = grad;
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    drawParticles() {
+        const ctx = this.ctx;
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+        ctx.save();
+        ctx.globalAlpha = p.life * 0.5;
+        ctx.fillStyle = `rgba(255, 200, 100, ${p.life * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        }
+    }
+
+    animate() {
+        const now = performance.now();
+        if (now - this.lastMoveTs > this.IDLE_MS) {
+        this.clearTrail(true);
+        this.lastMoveTs = now;
+        }
+
+        if (this.cursorEl) {
+        const rot = Math.atan2(this.vel.y, this.vel.x) * (180 / Math.PI);
+        this.cursorEl.style.transform = `rotate(${rot}deg)`;
+        }
+
+        this.drawTrail();
+        this.drawParticles();
+        requestAnimationFrame(() => this.animate());
+    }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+    new MeteorCursor();
+    });
+    </script>
+
+</body>
+</html>
