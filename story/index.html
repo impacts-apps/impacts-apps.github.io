@@ -1,0 +1,2497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>!mpact - Impactor-2025: The Story</title>
+    <meta charset="utf-8">
+    <meta name="description" content="Interactive 3D rendering of Earth bathymetry"/>
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script src="js/xg.min.eb2.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #ffffff;
+            --bg-color: #000000;
+            --accent-color-intro: #24D3FF;
+            --text-gray: #888888;
+            --animation-duration: 1.5s;
+        }
+
+        /* Container da introdução */
+        .intro-container {
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+            z-index: 10001;
+            background: var(--bg-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 2s ease-out;
+            cursor: default;
+        }
+
+        .intro-container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Canvas para a Terra em wireframe */
+        #intro-canvas {
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Overlay escuro gradual */
+        .intro-overlay {
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0);
+            z-index: 2;
+        }
+
+        /* Container dos textos */
+        .intro-text-container {
+            position: fixed;
+            width: 80%;
+            text-align: center;
+            z-index: 3;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Textos da introdução */
+        .intro-text {
+            position: absolute;
+            width: 100%;
+            opacity: 0;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+            font-size: clamp(24px, 4vw, 42px);
+            line-height: 1.4;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            animation: none;
+            pointer-events: none;
+        }
+
+        .intro-text.active {
+            animation: fadeInOut 5s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -40%);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+        }
+
+        /* Texto com destaque */
+        .intro-text .highlight {
+            color: #FF3C00;
+            font-weight: 500;
+        }
+
+        /* Skip button da intro */
+        .intro-skip-button {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 32px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: var(--text-gray);
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 4;
+        }
+
+        .intro-skip-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-color-intro);
+            color: var(--primary-color);
+        }
+
+        /* Sound icon */
+        .sound-toggle {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            z-index: 4;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+
+        .sound-toggle:hover {
+            opacity: 1;
+        }
+
+    </style>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #000000;
+            --accent: #24D3FF;
+            --danger: #ff3366;
+            --warning: #ff3c00;
+            --text: #ffffff;
+            --text-dim: rgba(255, 255, 255, 0.5);
+            --nav-width: 80px;
+            --content-width: 480px;
+            --easing: cubic-bezier(0.23, 1, 0.320, 1);
+        }
+
+        html {
+            overflow: hidden;
+            height: 100vh;
+            background: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        #container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+            background: transparent;
+        }
+        
+        /* NOVO ELEMENTO E ESTILO PARA O FADE */
+        #fade-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: #000000;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* New style for take 13 message */
+        .second-chance-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 800px;
+            text-align: center;
+            color: #ffffff;
+            font-size: clamp(20px, 3vw, 32px);
+            font-weight: 400;
+            letter-spacing: 1px;
+            line-height: 1.5;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10000;
+            text-shadow: 0 0 30px rgba(0, 255, 170, 0.5);
+        }
+
+        .story-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 2000;
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--warning));
+            transition: width 1s var(--easing);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .progress-text {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            z-index: 2001;
+        }
+
+        .story-viewport {
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .content-wrapper {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .content-section {
+            position: absolute;
+            width: var(--content-width);
+            max-width: 90%;
+            opacity: 0;
+            transform: translateY(50px);
+            pointer-events: none;
+        }
+
+        .content-section.active {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: all;
+        }
+
+        .content-left {
+            left: 143px;
+            top: 15%;
+            transform: translateY(-50%);
+        }
+
+        .content-right {
+            right: calc(var(--nav-width) + 60px);
+            top: 30%;
+            transform: translateY(-50%);
+        }
+
+        .content-center {
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .content-bottom {
+            left: 50%;
+            bottom: 80px;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        
+        .scroll-warning {
+            display: none;
+            opacity: 0;
+            background-color: #F6AD06;
+            color: #000000;
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 4px;
+            margin-top: 32px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 12px;
+            transition: opacity 0.3s ease;
+            width: fit-content;
+        }
+        
+        .content-center .scroll-warning {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .section-number {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 24px;
+            opacity: 0.8;
+        }
+
+        .section-title {
+            font-size: clamp(42px, 6vw, 72px);
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 16px;
+            letter-spacing: -3px;
+        }
+
+        .section-title2 {
+            font-size: clamp(42px, 6vw, 72px);
+            font-weight: 700;
+            line-height: 1;
+            margin-top: 30px;
+            letter-spacing: -3px;
+            margin-left: 164px;
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+            font-weight: 300;
+        }
+
+        .section-text {
+            font-size: 16px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+            max-width: 400px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 32px;
+        }
+
+        .data-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        .data-card.critical {
+            border-color: var(--danger);
+            animation: pulse-critical 2s infinite;
+        }
+        
+        .data-card.live-data-loaded {
+            animation: pulse-border-accent 1s ease-out;
+        }
+
+        @keyframes pulse-border-accent {
+            0% { border-color: rgba(0, 255, 170, 0.5); box-shadow: 0 0 5px rgba(0, 255, 170, 0.2); }
+            50% { border-color: rgba(0, 255, 170, 1); box-shadow: 0 0 20px rgba(0, 255, 170, 0.5); }
+            100% { border-color: rgba(0, 255, 170, 0.5); box-shadow: 0 0 5px rgba(0, 255, 170, 0.2); }
+        }
+
+        @keyframes pulse-critical {
+            0%, 100% { 
+                border-color: var(--danger);
+                box-shadow: 0 0 10px rgba(255, 51, 102, 0.3);
+            }
+            50% { 
+                border-color: var(--warning);
+                box-shadow: 0 0 20px rgba(255, 51, 102, 0.5);
+            }
+        }
+
+        .data-card.success {
+            border-color: var(--accent);
+            animation: pulse-success 3s infinite;
+        }
+
+        @keyframes pulse-success {
+            0%, 100% { 
+                border-color: var(--accent);
+                box-shadow: 0 0 10px rgba(0, 255, 170, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 20px rgba(0, 255, 170, 0.5);
+            }
+        }
+
+        .data-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .data-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .data-unit {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-left: 4px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent);
+            border-radius: 50%;
+            animation: pulse-live 1.5s infinite;
+        }
+
+        @keyframes pulse-live {
+            0%, 100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 170, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 10px 10px rgba(0, 255, 170, 0); }
+        }
+        
+        .section-number,
+        .data-value,
+        .data-unit,
+        .hud-element,
+        .info-title,
+        .info-link,
+        .info-stat-value,
+        #asteroid-watch-widget,
+        .data-timestamp {
+            font-family: 'Space Mono', monospace;
+        }
+
+        .nav-ruler {
+            position: fixed;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: var(--nav-width);
+            height: 400px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ruler-track {
+            position: relative;
+            width: 2px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .ruler-markers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ruler-marker {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .ruler-marker:hover {
+            width: 30px;
+            background: var(--accent);
+        }
+
+        .ruler-marker.active {
+            width: 40px;
+            background: var(--accent);
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        .ruler-indicator {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            transition: top 0.8s var(--easing);
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        .warning-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: radial-gradient(circle at center, transparent, rgba(255, 0, 0, 0.2));
+            opacity: 0;
+            pointer-events: none;
+            z-index: 90;
+            transition: opacity 0.5s;
+        }
+
+        .warning-overlay.active {
+            opacity: 1;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        .impact-alert {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 120px;
+            font-weight: 900;
+            letter-spacing: -5px;
+            color: #fbab02;
+            text-shadow: 0 0 40px var(--danger);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.5s;
+        }
+
+        .impact-alert.active {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            animation: glitch 0.3s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 100% { text-shadow: 0 0 40px var(--danger); }
+            25% { text-shadow: -2px 0 40px cyan, 2px 0 40px magenta; }
+            50% { text-shadow: 2px 0 40px cyan, -2px 0 40px magenta; }
+            75% { text-shadow: 0 0 40px var(--danger); }
+        }
+
+        .success-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: radial-gradient(circle at center, transparent, rgba(0, 255, 170, 0.1));
+            opacity: 0;
+            pointer-events: none;
+            z-index: 91;
+            transition: opacity 1s;
+        }
+
+        .success-overlay.active {
+            opacity: 1;
+        }
+
+        .hud-element {
+            position: fixed;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            z-index: 80;
+        }
+
+        .hud-top-left {
+            top: 30px;
+            left: 30px;
+        }
+
+        .hud-top-right {
+            top: 30px;
+            right: 30px;
+            text-align: right;
+        }
+
+        .hud-distance {
+            color: var(--warning);
+        }
+
+        .stars-container {
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            width: 1px; /* Deixa a estrela menor */
+            height: 1px; /* Deixa a estrela menor */
+            background: white;
+            border-radius: 50%;
+            /* A animação foi removida para um fundo estático */
+            opacity: 0.8; /* Define uma opacidade fixa */
+        }
+
+        .info-panel {
+            position: fixed;
+            width: 360px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #24D3FF;
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 100;
+            opacity: 0;
+            transition: all 0.4s var(--easing);
+            pointer-events: none;
+            overflow: hidden;
+            transform: translateY(20px);
+        }
+        
+        .info-panel.is-widget {
+            width: 410px;
+        }
+
+        .info-panel.active {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+        
+        .preview-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: height 0.4s var(--easing), opacity 0.4s var(--easing), margin-top 0.4s var(--easing);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .preview-window {
+            width: 100%;
+            height: 180px;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 10, 20, 0.95) 100%);
+            border: 1px solid rgba(50, 173, 245, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 
+                0 4px 20px rgba(0, 255, 170, 0.2),
+                inset 0 0 20px rgba(0, 255, 170, 0.05);
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.3s var(--easing);
+        }
+        
+        .preview-content {
+            width: 290px;
+            height: calc(100% - 225px);
+       
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 10px;
+        }
+        
+        .preview-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 4px 8px;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.9) 100%);
+            color: var(--accent);
+            font-size: 9px;
+            font-family: 'Space Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            border-top: 1px solid rgba(0, 255, 170, 0.2);
+        }
+
+        .info-title {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+
+         .info-title2 {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgb(246, 102, 6);
+            margin-bottom: 16px;
+        }
+
+        .info-content {
+            font-size: 13px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 20px;
+        }
+
+        .info-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: rgba(50, 173, 245, 0.26);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+            margin-top: 8px;
+            margin-right: 8px;
+            transition: all 0.3s;
+        }
+
+        .info-link:hover {
+            background: rgba(50, 173, 245, 0.26);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(50, 173, 245, 0.3);
+        }
+
+        .info-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .info-stat {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .info-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        
+        #asteroid-watch-widget { cursor: default; }
+        .aw-header { text-align: left; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .aw-title-group .aw-title { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -1px; margin: 0; color: var(--text); }
+        .aw-title-group .aw-subtitle { font-size: 12px; color: var(--text-dim); margin: 0; }
+        .aw-pagination { font-size: 12px; color: var(--text-dim); }
+        .aw-main-content {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 20px;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        .aw-details-grid { display: flex; flex-direction: column; gap: 12px; text-align: left; width: 150px; }
+        .aw-asteroid-name { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .aw-detail-item .label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
+        .aw-detail-item .value { font-size: 16px; font-weight: 700; color: var(--text); }
+        .aw-asteroid-graphic { text-align: center; }
+        .aw-asteroid-graphic .rock-img { width: 64px; height: 64px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 0 L100 25 L85 75 L30 100 L0 60 Z" fill="%23888"/></svg>') no-repeat center center; background-size: contain; filter: invert(1) grayscale(1) brightness(1.5) contrast(1.2); opacity: 0.8; margin: 0 auto; }
+        .aw-asteroid-graphic .size-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-top: 4px; }
+        .aw-asteroid-graphic .size-value { font-size: 14px; font-weight: 700; color: var(--text); }
+        .aw-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+        .aw-nav button { background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); font-family: 'Space Mono', monospace; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; }
+        .aw-nav button:hover:not(:disabled) { background: var(--accent); color: var(--bg-dark); border-color: var(--accent); transform: translateY(-1px); }
+        .aw-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .aw-dots { display: flex; gap: 6px; }
+        .aw-dot { width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; transition: all 0.3s; }
+        .aw-dot.active { background: var(--accent); transform: scale(1.2); }
+        
+        .countdown-container { 
+            text-align: center; 
+            width: 100%; 
+            padding: 12px; 
+            border-radius: 8px;
+            border: 1px solid var(--accent);
+            background: rgba(0, 255, 170, 0.05);
+        }
+        .countdown-title { font-size: 10px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; letter-spacing: 2px; }
+        .countdown-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .countdown-item .value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+        .countdown-item .label { font-size: 8px; text-transform: uppercase; color: var(--text-dim); margin-top: 2px; }
+
+        .hero-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 40px;
+            background: transparent;
+            border: 2px solid white;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s;
+            margin-top: 40px;
+            cursor: pointer;
+        }
+
+        .hero-button:hover {
+            background: white;
+            color: black;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.3);
+        }
+
+        .skip-button {
+            position: fixed;
+            bottom: 14px;
+            right: 60px;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .skip-button.visible {
+            opacity: 1;
+        }
+
+        .skip-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        
+        .learn-more-button {
+            position: fixed;
+            bottom: 40px;
+            left: 45%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: rgb(255 255 255 / 76%);
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .learn-more-button .arrows {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .learn-more-button .arrow {
+            /* O container permanece o mesmo */
+            width: 15px;
+            height: 15px;
+            position: relative;
+            border: none;
+            transform: none;
+        }
+
+        .learn-more-button .arrow::before,
+        .learn-more-button .arrow::after {
+            content: "";
+            position: absolute;
+            background-color: var(--text-dim);
+            width: 1px;
+            height: 10px;
+            /* ANCORA as linhas na base do container */
+            bottom: 0; 
+        }
+
+        .learn-more-button .arrow::before {
+            left: 50%;
+            /* ROTACIONA a partir da base esquerda */
+            transform: rotate(45deg);
+            transform-origin: bottom left; 
+        }
+
+        .learn-more-button .arrow::after {
+            right: 50%;
+            /* ROTACIONA a partir da base direita */
+            transform: rotate(-45deg);
+            transform-origin: bottom right; 
+        }
+
+        .bottom-left-controls {
+            position: fixed;
+            bottom: 62px;
+            left: 145px;
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+        }
+
+        .bottom-right-controls {
+            position: fixed;
+            bottom: 62px;
+            left: calc(50% + 845px);
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+        }
+
+        .bottom-bot-controls {
+            position: fixed;
+            bottom: 62px;
+            left: 50%;
+            z-index: 100;
+            display: flex;
+        }
+
+        .control-button {
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: var(--accent);
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+         .control-button2 {
+            padding: 12px 25px;
+            background: #24D3FF;
+            border: 1px solid #000000;
+            border-radius: 4px;
+            color: #000000;
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .control-button:hover {
+            background: rgba(0, 255, 170, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 170, 0.3);
+        }
+
+        .control-button2:hover {
+            background: rgb(255, 255, 255);
+            box-shadow: 0 0 10px rgba(0, 255, 170, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .nav-ruler, .bottom-left-controls {
+                display: none;
+            }
+            
+            .content-section {
+                padding: 20px;
+                left: 20px !important;
+                right: 20px !important;
+                max-width: calc(100% - 40px);
+                width: calc(100% - 40px);
+                top: 50% !important;
+                bottom: auto !important;
+                transform: translateY(-50%) !important;
+                text-align: center;
+            }
+            
+            .section-title {
+                font-size: 36px;
+            }
+            
+            .info-panel {
+                display: none;
+            }
+        }
+
+
+            .defense-strategies-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 24px;
+                margin-top: 32px;
+                width: 730px;
+                max-width: 1000px;
+            }
+
+            .strategy-card {
+                background: rgb(178 177 177 / 10%);
+                border: 1px solid rgba(50, 173, 245, 0.3);
+                border-radius: 12px;
+                padding: 24px;
+                text-align: center;
+                transition: all 0.3s;
+                cursor: pointer;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .strategy-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, var(--accent), transparent);
+                animation: scan 3s infinite;
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+
+            .strategy-card:hover::before {
+                opacity: 1;
+            }
+
+            .strategy-card:hover {
+                border-color: var(--accent);
+                transform: translateY(-4px);
+                box-shadow: 0 10px 30px rgba(50, 173, 245, 0.3);
+            }
+
+            .strategy-icon {
+                width: 60px;
+                height: 60px;
+                margin: 0 auto 16px;
+                position: relative;
+            }
+
+            .strategy-icon svg {
+                animation: float 3s ease-in-out infinite;
+            }
+
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-5px); }
+            }
+
+            @keyframes scan {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+
+            .strategy-title {
+                font-size: 14px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                color: var(--accent);
+                margin-bottom: 12px;
+                text-transform: uppercase;
+            }
+
+            .strategy-desc {
+                font-size: 13px;
+                line-height: 1.5;
+                color: rgba(255, 255, 255, 0.7);
+                margin-bottom: 16px;
+                min-height: 60px;
+            }
+
+            .strategy-stats {
+                display: flex;
+                justify-content: center;
+                gap: 16px;
+                font-size: 11px;
+                color: rgb(255 176 0);
+                font-family: 'Space Mono', monospace;
+            }
+
+            .stat-item {
+                padding: 4px 8px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 4px;
+            }
+
+            @media (max-width: 768px) {
+                .defense-strategies-grid {
+                    grid-template-columns: 1fr;
+                    max-width: 400px;
+                }
+            }
+
+
+         /* Scramble Text Animation Styles */
+                .scramble-text-story,
+                .scramble-text {
+                    display: inline-block;
+                    position: relative;
+                    font-family: inherit;
+                    min-width: fit-content;
+                }
+
+                .scramble-text-story.animating,
+                .scramble-text.animating {
+                    animation: scrambleGlitch 0.3s infinite;
+                }
+
+                @keyframes scrambleGlitch {
+                    0%, 100% {
+                        text-shadow: 
+                            0.05em 0 0 rgba(255, 0, 0, 0.75),
+                            -0.05em -0.025em 0 rgba(0, 255, 0, 0.75),
+                            0.025em 0.05em 0 rgba(0, 0, 255, 0.75);
+                    }
+                    15% {
+                        text-shadow: 
+                            -0.05em -0.025em 0 rgba(255, 0, 0, 0.75),
+                            0.025em 0.025em 0 rgba(0, 255, 0, 0.75),
+                            -0.05em -0.05em 0 rgba(0, 0, 255, 0.75);
+                    }
+              }
+
+              /* NEW: Compose fade + scramble for active intro slides */
+              .intro-text.active.scramble-text-story.animating {
+                  animation: fadeInOut 5s ease-in-out, scrambleGlitch 0.3s infinite;
+              }
+
+                #starfield-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+
+                    /* âncora visual para qualquer coisa que tenha tooltip */
+        .has-tooltip {
+        position: relative;
+        cursor: help;
+        text-decoration: none; /* tira o sublinhado nativo */
+        border-bottom: 1px dotted currentColor;  /* usa borda somente sob o conteúdo */
+        text-underline-offset: 0;  /* garante aparência consistente */
+        }
+        /* bolha padrão */
+        .c-tooltip {
+            position: fixed; /* fora do fluxo, evita recortes em contêineres */
+            max-width: 36ch;
+            padding: .6rem .8rem;
+            border-radius: .6rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,.25);
+            background: rgba(16, 20, 24, .96);
+            color: #e8f1ff;
+            font: 500 0.9rem/1.35 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+            z-index: 9999;
+            transform: translate(-50%, -10px);
+            pointer-events: none; /* não captura o ponteiro; melhora foco/saída */
+            opacity: 0;
+            transition: opacity .12s ease-out, transform .12s ease-out;
+        }
+        .c-tooltip.is-visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        .c-tooltip .tt-title {
+            display: block;
+            font-weight: 700;
+            margin-bottom: .25rem;
+        }
+        .c-tooltip .tt-meta {
+            display: block;
+            margin-top: .45rem;
+            font-size: .8rem;
+            opacity: .8;
+        }
+        .c-tooltip .tt-meta a {
+            color: #24D3FF;
+            text-decoration: none;
+        }
+        /* setinha */
+        .c-tooltip::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: -6px;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(16, 20, 24, .96);
+        }
+        /* acessibilidade: quando prefers-reduced-motion, tira animação */
+        @media (prefers-reduced-motion: reduce) {
+            .c-tooltip { transition: none; }
+        }
+
+
+        /* ===== Arrow Keys UI — skin igual aos botões verdes ===== */
+
+        /* mantém sua posição atual; não altere .arrow-keys-ui */
+
+        .arrow-key{
+        /* menor que antes */
+        width: 54px;
+        height: 54px;
+
+        /* aparência igual à .control-button */
+        background: rgba(0, 255, 170, 0.06);       /* leve vidro + verde */
+        border: 1px solid var(--accent);           /* mesma cor de contorno */
+        border-radius: 6px;
+        color: var(--accent);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+
+        /* remove o efeito 3D antigo */
+        box-shadow: none;
+        transform: none;
+        transition: background .2s ease, box-shadow .2s ease, transform .06s ease;
+        }
+
+        /* se existir o pseudo-elemento do estilo antigo, anulamos */
+        .arrow-key::before{ display:none !important; }
+
+        .arrow-key .arrow-glyph{
+        font-family: 'Space Mono', monospace;
+        font-size: 22px;
+        line-height: 1;
+        color: var(--accent);
+        text-shadow: none; /* sem brilho branco */
+        }
+
+        /* hover/active iguais à vibe dos botões */
+        .arrow-key:hover{
+        background: rgba(0, 255, 170, 0.10);
+        box-shadow: 0 0 10px rgba(0, 255, 170, 0.30);
+        }
+        .arrow-key:active{
+        transform: translateY(1px);
+        box-shadow: 0 0 6px rgba(0, 255, 170, 0.25);
+        }
+
+        /* a seta de baixo pode continuar levemente maior se você quiser */
+        .arrow-key.key-down{ height: 58px; }
+
+
+        /* === FIX POSIÇÃO: mantém no canto direito, onde você colocou === */
+        .arrow-keys-ui{
+        position: fixed !important;
+        top: auto !important;      /* zera qualquer herança que empurre pro topo */
+        left: 670px !important;     /* evita ir para a esquerda */         /* ajuste fino: mesma coluna onde estão agora */
+        bottom: 61px;             /* ajuste fino: mesma linha vertical */
+        transform: none !important;
+        z-index: 2200;             /* acima do HUD/topo */
+        }
+
+        /* (opcional) se algum estilo global aplicar translateY, neutraliza */
+        .arrow-keys-ui.visible{ transform: none !important; }
+
+        .arrow-keys-ui{ display: none; }
+        .arrow-keys-ui.visible{ display: grid; }  /* mostra quando no Take 01 */
+
+    </style>
+</head>
+
+<body>
+
+<div class="intro-container" id="introContainer">
+    <canvas id="intro-canvas"></canvas>
+    
+    <div class="intro-overlay"></div>
+    
+    <div class="intro-text-container">
+        <div class="intro-text scramble-text-story" data-index="0">Dear Inhabitants of Earth,</div>
+        <div class="intro-text scramble-text-story" data-index="1">Greetings from the space.</div>
+        <div class="intro-text scramble-text-story" data-index="2">We are sending this transmission as a warning,</div>
+        <div class="intro-text scramble-text-story" data-index="3">so you can prepare for what's coming.</div>
+        <div class="intro-text scramble-text-story" data-index="4">Welcome to !MPACTS</div>
+    </div>
+    
+    <div class="bottom-bot-controls">
+        <button class="control-button2" id="skipIntro">
+            SKIP
+        </button>
+    </div>
+    
+    <div class="sound-toggle" id="soundToggle">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M8 10V22L16 26V6L8 10Z" stroke="white" stroke-width="1"/>
+            <path d="M20 12C20 12 22 14 22 16C22 18 20 20 20 20" stroke="white" stroke-width="1"/>
+            <path d="M24 8C24 8 28 12 28 16C28 20 24 24 24 24" stroke="white" stroke-width="1" opacity="0.5"/>
+        </svg>
+    </div>
+</div>
+
+<div class="second-chance-message" id="secondChanceMessage">
+    BUT LET'S SAY WE KNOW IT'S COMING<br>
+    AND HAVE ONE MORE CHANCE TO SAVE EARTH.<br>
+    HOW COULD WE SAVE OURSELVES?
+</div>
+
+<div class="story-progress">
+    <div class="progress-fill" id="storyProgress"></div>
+</div>
+
+
+<div class="story-viewport">
+    <div id="fade-overlay"></div>
+    <div id="container"></div>
+    
+   <div class="stars-container">
+    <canvas id="starfield-canvas"></canvas>
+    </div>
+    
+    <div class="content-wrapper">
+        <div class="scroll-warning" id="scroll-warning">
+            DISABLE FREE LOOK [L] TO CONTINUE
+        </div>
+
+        <!-- Arrow keys UI – aparece só no Take 01 -->
+        <div class="arrow-keys-ui" id="arrowKeysUI" aria-hidden="true">
+        <button class="arrow-key key-up"  id="btnArrowUp"   title="Previous (↑)"  aria-label="Previous section">
+            <span class="arrow-glyph">↑</span>
+        </button>
+        <button class="arrow-key key-down" id="btnArrowDown" title="Next (↓)"      aria-label="Next section">
+            <span class="arrow-glyph">↓</span>
+        </button>
+        </div>
+
+        <div class="content-section content-left" id="section-0">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Home - Planet Earth</h1>
+            <p class="section-subtitle">A pale blue dot in the cosmos</p>
+            <p class="section-text">
+                For 4.5 billion years, Earth has been our sanctuary. A perfect oasis of life in the vast emptiness of space. Everything we've ever known, loved, and built exists here on this blue and white sphere. 8.1 billion souls protected by a thin <span
+  class="has-tooltip"
+  data-tooltip="≈99.9999% of the atmosphere’s mass lies below 100 km (the Kármán line)."
+  data-tooltip-title="A thin atmospheric ‘skin’"
+  data-tooltip-source="NASA / educational materials"
+  data-tooltip-url="https://science.nasa.gov/earth/facts/atmosphere/"
+>atmosphere</span>—most of its mass within the first ~100 km—a fragile shield against cosmic threats that wander through the darkness. We are not alone in this cosmic shooting gallery. Ancient rocks from the birth of our solar system still roam the void, occasionally crossing paths with our world.
+            </p>
+            <div class="data-grid">
+                <div class="data-card">
+                    <div class="data-label">Population</div>
+                    <div class="data-value">8.1<span class="data-unit">billion</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section content-left" id="section-1">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Protected by a thin veil</h1>
+            <p class="section-subtitle">Earth Defense System</p>
+            <p class="section-text">
+                Protected by a thin atmosphere—whose bulk lies within <span
+  class="has-tooltip"
+  data-tooltip="Earth’s mean diameter is ~12,742 km; 100 km is only ~0.78% of that. Our shield is razor thin in planetary terms."
+  data-tooltip-title="‘~1% of Earth’s diameter’"
+  data-tooltip-source="NASA Earth Facts"
+  data-tooltip-url="https://science.nasa.gov/earth/facts/size-and-distance/"
+>~1%</span> of Earth's diameter—life flourishes. But the cosmos is not a silent void. It's a cosmic <span
+  class="has-tooltip"
+  data-tooltip="Earth is bombarded daily by ~48.5 tons of meteoroid material. Most burns up, but larger fragments can reach the ground."
+  data-tooltip-title="Cosmic shooting gallery"
+  data-tooltip-source="NASA — Meteors & Meteorites"
+  data-tooltip-url="https://science.nasa.gov/solar-system/asteroids/meteors-meteorites/"
+>shooting</span> gallery, and Earth is a moving target.
+            </p>
+        </div>
+
+        <div class="content-section content-left" id="section-2">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Our Cosmic Neighborhood</h1>
+            <p class="section-subtitle">NASA's vigilant watch over the skies</p>
+            <p class="section-text">
+                Thousands of Near-Earth Objects <span
+  class="has-tooltip"
+  data-tooltip="NEOs are asteroids or comets whose orbits bring them within 1.3 astronomical units (AU) of the Sun — close enough to approach Earth."
+  data-tooltip-title="Near-Earth Objects"
+  data-tooltip-source="NASA CNEOS"
+  data-tooltip-url="https://cneos.jpl.nasa.gov/about/neo_groups.html"
+>(NEOs)</span> cross our cosmic neighborhood. NASA tirelessly monitors the skies, cataloging potential threats. Each line represents a space rock on its journey, a constant reminder of our place in the universe.
+            </p>
+            <div class="data-grid">
+                <div class="data-card" id="daily-neo-card">
+                    <div class="data-label">
+                        <span class="live-dot"></span>
+                        <span>CNEOS API <span
+  class="has-tooltip"
+  data-tooltip="A ‘fly-by’ means an asteroid passes within a few million kilometers of Earth. Most are small and pose no threat, but NASA tracks every close approach."
+  data-tooltip-title="NEO fly-bys"
+  data-tooltip-source="NASA CNEOS Close Approaches"
+  data-tooltip-url="https://cneos.jpl.nasa.gov/ca/"
+>Fly-bys</span> Today</span>
+                    </div>
+                    <div class="data-value" id="neos-tracked">--</div>
+                    <div class="data-timestamp" id="neo-timestamp">Fetching NASA API...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section content-left" id="section-3">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Impactor-2025</h1>
+            <p class="section-subtitle">A cosmic threat emerges</p>
+            <p class="section-text">
+                <strong><span
+  class="has-tooltip"
+  data-tooltip="The NASA Space Apps Challenge uses fictional scenarios to train, educate, and inspire participants in planetary defense problem-solving."
+  data-tooltip-title="Training scenario"
+  data-tooltip-source="NASA Space Apps"
+  data-tooltip-url="https://www.spaceappschallenge.org/"
+>Fictional scenario</span></strong> one has been detected. Route: Collision. Probability: 99.8%. 
+                <span
+  class="has-tooltip"
+  data-tooltip="Orbital models use Newtonian mechanics and observational data to compute the trajectory of an asteroid and predict possible impacts."
+  data-tooltip-title="Orbital models"
+  data-tooltip-source="NASA CNEOS – Orbit Determination"
+  data-tooltip-url="https://cneos.jpl.nasa.gov/about/neo_orbits.html"
+>orbital models</span> confirm the inevitable in this scenario—it's not a matter of 'if,' but 'when' and 'where.' 
+                Time to impact: 180 days. <em>(These values are placeholders for the exercise, not a NASA prediction.)</em>
+            </p>
+            <div class="data-grid">
+                <div class="data-card critical">
+                    <div class="data-label">Probability</div>
+                    <div class="data-value">99.8<span class="data-unit">%</span></div>
+                </div>
+                <div class="data-card critical">
+                    <div class="data-label">Time to Impact</div>
+                    <div class="data-value">180<span class="data-unit">Days</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section content-right" id="section-4">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">The Encounter</h1>
+            <p class="section-text">
+                At a distance of 15 million kilometers, with only 7 days remaining, Impactor-2025 reveals itself. It is a <span
+  class="has-tooltip"
+  data-tooltip="C-type (carbonaceous) asteroids are primitive bodies rich in carbon. They make up ~75% of known asteroids and are very dark, with albedo as low as 0.03."
+  data-tooltip-title="C-type asteroid"
+  data-tooltip-source="NASA Asteroid Types"
+  data-tooltip-url="https://solarsystem.nasa.gov/asteroids-comets-and-meteors/asteroids/overview/"
+>C-type</span> (carbonaceous) asteroid, a primitive relic from the formation of the solar system. Its dark, carbon-rich surface (low <span
+  class="has-tooltip"
+  data-tooltip="Albedo is the fraction of sunlight reflected by a surface. Low albedo means the asteroid is very dark, reflecting little light, which makes it harder to detect."
+  data-tooltip-title="Albedo"
+  data-tooltip-source="NASA Earth Observatory"
+  data-tooltip-url="https://earthobservatory.nasa.gov/features/Albedo"
+>albedo</span>) makes it harder to see against the vacuum, explaining its late detection in this scenario.
+            </p>
+        </div>
+
+        <div class="content-section content-left" id="section-5">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story" style="width: 600px;">The Cosmic Fossil</h1>
+            <p class="section-text">
+                It is not a dense rock, but a <span
+  class="has-tooltip"
+  data-tooltip="Many asteroids are rubble piles: loose collections of rock, dust, and ice held together by gravity rather than solid rock."
+  data-tooltip-title="Low-density aggregate"
+  data-tooltip-source="NASA OSIRIS-REx / Bennu"
+  data-tooltip-url="https://www.asteroidmission.org/"
+>low-density aggregate</span> aggregate, a cosmic fossil carrying the building blocks of life. Its internal <span
+  class="has-tooltip"
+  data-tooltip="Volatiles are compounds like water, CO₂, and organics that vaporize at relatively low temperatures, influencing impact behavior."
+  data-tooltip-title="Volatiles"
+  data-tooltip-source="NASA Planetary Science"
+  data-tooltip-url="https://science.nasa.gov/solar-system/asteroids/composition/"
+>volatiles</span>, frozen for billions of years, are its greatest structural weakness.
+            </p>
+             <div class="data-grid">
+                <div class="data-card">
+                    <div class="data-label">Composition</div>
+                    <div class="data-value">Carbon, Ice</div>
+                </div>
+                <div class="data-card">
+                    <div class="data-label">Density</div>
+                    <div class="data-value">~1.6 g/cm³<span class="data-unit">g/cm³</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section content-right" id="section-6">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story" style="width: 603px;">The Hidden Energy</h1>
+            <p class="section-subtitle"><span
+  class="has-tooltip"
+  data-tooltip="The energy of motion: E = ½mv². For large asteroids, velocity dominates — doubling speed quadruples the energy."
+  data-tooltip-title="Kinetic energy"
+  data-tooltip-source="NASA Planetary Defense"
+  data-tooltip-url="https://www.nasa.gov/planetarydefense/"
+>kinetic energy</span> formula: <i>E<sub>k</sub> = ½mv²</i></p>
+            <p class="section-text">
+                Despite its low density, its immense mass and a velocity of 25 km/s would unleash enormous energy — about <strong><span
+  class="has-tooltip"
+  data-tooltip="Calculation: 
+1) Radius = 330 m / 2 = 165 m. 
+2) Volume = 4/3·π·r³ ≈ 1.88×10⁷ m³. 
+3) Mass = density × volume = 1,700 kg/m³ × 1.88×10⁷ ≈ 3.20×10¹⁰ kg. 
+4) Kinetic Energy = ½·m·v² = 0.5 × 3.20×10¹⁰ × (25,000 m/s)² ≈ 1.0×10¹⁹ J. 
+5) Convert to megatons TNT (1 Mt = 4.184×10¹⁵ J): 1.0×10¹⁹ / 4.184×10¹⁵ ≈ 2,390 Mt."
+  data-tooltip-title="Impact energy calculation"
+  data-tooltip-source="Physics of impact events"
+  data-tooltip-url="https://ssd.jpl.nasa.gov/tools/asteroid_risk.html"
+>≈2,390 megatons</span> of TNT equivalent</strong> for a <strong>~330 m, 1.7 g/cm³</strong> body. It's not just a rock; it's a messenger from our solar system's <span
+  class="has-tooltip"
+  data-tooltip="Asteroids are remnants of the early solar system (~4.5 billion years old), preserving primitive material that never coalesced into planets."
+  data-tooltip-title="Primitive past"
+  data-tooltip-source="NASA Solar System Exploration"
+  data-tooltip-url="https://solarsystem.nasa.gov/asteroids-comets-and-meteors/asteroids/"
+>primitive past</span>, and now with less than 1 day to impact, there is nothing we can do in this branch of the story.
+            </p>
+
+        </div>
+
+        <div class="content-section content-right" id="section-7">
+            <div class="section-number"></div>
+            <h1 class="section-title2 scramble-text-story">!mpact</h1>
+            <p class="section-subtitle"></p>
+            <p class="section-text">
+
+            </p>
+
+        </div>
+
+<div class="content-section content-left" id="section-8">
+  <div class="section-number"></div>
+  <h1 class="section-title scramble-text-story">Fragmentation</h1>
+  <p class="section-subtitle">The Final Descent</p>
+
+  <p class="section-text">
+    An <span
+      class="has-tooltip"
+      data-tooltip="An airburst is the rapid energy release when a meteoroid/asteroid disintegrates in the atmosphere. The energy is deposited over altitude rather than a single point on the ground."
+      data-tooltip-title="Airburst"
+      data-tooltip-source="NASA / bolide phenomenology"
+      data-tooltip-url="https://cneos.jpl.nasa.gov/fireballs/"
+    >airburst</span> releases part of the energy as dynamic <span
+      class="has-tooltip"
+      data-tooltip="Dynamic pressure q = ½·ρ_air·v². At 25 km/s, q overwhelms a rubble-pile’s cohesion (≲100 Pa) high in the atmosphere, so breakup begins aloft and energy is deposited along a vertical column."
+      data-tooltip-title="Dynamic pressure"
+      data-tooltip-source="Atmospheric entry physics"
+      data-tooltip-url="https://www.nasa.gov/planetarydefense/"
+    >pressure</span> shreds the rubble-pile. A <span
+      class="has-tooltip"
+      data-tooltip="Residual core calculation: d = 150 m → r = 75 m; volume = 4/3·π·r³ ≈ 1.87×10⁶ m³; mass ≈ 3.0×10⁹ kg (ρ = 1,700 kg/m³); kinetic energy = ½·m·v² ≈ 1.0×10¹⁸ J ≈ 224 Mt of TNT."
+      data-tooltip-title="Residual energy (ground)"
+      data-tooltip-source="Step-by-step derivation"
+      data-tooltip-url="https://ssd.jpl.nasa.gov/tools/asteroid_risk.html"
+    >150-meter</span> core survives for the final impact — a more concentrated projectile. In this scenario, ~<span
+      class="has-tooltip"
+      data-tooltip="Energy budget for consistency with Take 07: total ≈ 2,390 Mt (330 m, 25 km/s, ρ = 1.7 g/cm³). Here we partition ~800 Mt into the high-altitude airburst/thermal/shock column, while ~224 Mt remains in the surviving core that reaches the ground; the remainder is dissipated along the entry column."
+      data-tooltip-title="Energy partition"
+      data-tooltip-source="Scenario consistency check"
+    >800 Mt</span> is deposited aloft, while ~<span
+      class="has-tooltip"
+      data-tooltip="This is the energy that drives crater formation, seismic coupling and near-field blast on the surface in subsequent takes."
+      data-tooltip-title="Ground-impact basis"
+      data-tooltip-source="Downstream effects use this value"
+    >224 Mt</span> reaches the ground.
+  </p>
+
+  <div class="data-grid">
+    <div class="data-card">
+      <div class="data-label">Airburst Altitude</div>
+      <div class="data-value">20<span class="data-unit">km</span></div>
+    </div>
+
+    <div class="data-card">
+      <div class="data-label">Airburst Energy</div>
+      <div class="data-value">~800<span class="data-unit">Mt</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Ground Impact Energy</div>
+      <div class="data-value">~224<span class="data-unit">Mt</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Total Kinetic (Take 07)</div>
+      <div class="data-value">~2,390<span class="data-unit">Mt</span></div>
+              </div>
+         </div>
+        </div>
+        
+        <div class="content-section content-left" id="section-9">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Global Shock Wave</h1>
+            <p class="section-subtitle">A Ripple Through the Atmosphere</p>
+        <p class="section-text">
+            The <span
+            class="has-tooltip"
+            data-tooltip="An atmospheric shockwave is a pressure disturbance moving faster than sound, driven here by ~224 Mt of ground-impact energy."
+            data-tooltip-title="Shockwave"
+            data-tooltip-source="Physics of explosions"
+            data-tooltip-url="https://www.nasa.gov/planetarydefense/"
+            >impact</span> unleashes a supersonic pressure wave. This atmospheric <span
+            class="has-tooltip"
+            data-tooltip="Overpressure is the pressure above normal atmospheric levels. At ~15 psi (≈103 kPa), even reinforced buildings collapse."
+            data-tooltip-title="Overpressure"
+            data-tooltip-source="Blast effects reference"
+            data-tooltip-url="https://apps.dtic.mil/sti/citations/ADA955373"
+            >shockwave</span> expands outward and can be detected far from the impact; for the largest events, waves can even <span
+            class="has-tooltip"
+            data-tooltip="Events like Krakatoa (1883) and Chelyabinsk (2013) generated atmospheric waves recorded by barometers worldwide."
+            data-tooltip-title="Global propagation"
+            data-tooltip-source="Historical analogs"
+            data-tooltip-url="https://www.usgs.gov/news/volcano-watch-krakatau-and-tonga-comparison"
+            >circle the globe</span>.
+        </p>
+        </div>
+
+        <div class="content-section content-right" id="section-10">
+        <div class="section-number"></div>
+        <h1 class="section-title scramble-text-story" style="width: 550px;">Seismic impacts</h1>
+        <p class="section-subtitle">Equivalent seismic shaking ≈ Mw 6.1–7.5 (coupling ε ≈ 10⁻⁵–10⁻³)</p>
+        <p class="section-text">
+            The impact generates powerful seismic <span
+            class="has-tooltip"
+            data-tooltip="Seismic waves are vibrations that travel through Earth’s interior. Primary (P) waves are compressional and fastest; Secondary (S) waves are shear and slower."
+            data-tooltip-title="Seismic waves"
+            data-tooltip-source="USGS Earthquake Hazards Program"
+            data-tooltip-url="https://earthquake.usgs.gov/"
+            >waves</span> that propagate efficiently through the ancient <span
+            class="has-tooltip"
+            data-tooltip="The Brazilian Shield is a geologically ancient craton of rigid crystalline rock, which transmits seismic energy with unusual efficiency across vast distances."
+            data-tooltip-title="Brazilian Shield"
+            data-tooltip-source="USGS / Geoscience references"
+            data-tooltip-url="https://pubs.usgs.gov/"
+            >Brazilian Shield</span>, shaking cities thousands of kilometers away. At <span
+            class="has-tooltip"
+            data-tooltip="Overpressure from seismic shaking: Mw 6.5–7+ quakes can topple buildings and collapse infrastructure, especially near the epicenter."
+            data-tooltip-title="Structural effects"
+            data-tooltip-source="Seismic engineering data"
+            >this intensity</span>, structures crumble and infrastructures collapse.
+        </p>
+
+        <div class="data-grid">
+            <div class="data-card critical">
+            <div class="data-label">Magnitude</div>
+            <div class="data-value">≈6.1–7.5<span class="data-unit">Mw</span></div>
+            </div>
+            <div class="data-card">
+            <div class="data-label">P-Wave Velocity</div>
+            <div class="data-value">~8<span class="data-unit">km/s</span></div>
+            </div>
+        </div>
+        </div>
+        <div class="content-section content-right" id="section-11">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">Atmospheric Effects</h1>
+            <p class="section-subtitle">Dust, aerosols, and short-lived cooling</p>
+            <p class="section-text">
+                Dust and <span
+                class="has-tooltip"
+                data-tooltip="Aerosols are fine solid or liquid particles suspended in the atmosphere. From volcanoes or impacts, they can reflect sunlight and cool the surface."
+                data-tooltip-title="Aerosols"
+                data-tooltip-source="NASA Earth Observatory"
+                data-tooltip-url="https://earthobservatory.nasa.gov/features/Aerosols"
+                >aerosols</span> injected into the atmosphere can darken skies locally and regionally for days to weeks, reducing <span
+                class="has-tooltip"
+                data-tooltip="Cooling happens when sunlight is scattered/absorbed by dust and soot, reducing insolation at the surface."
+                data-tooltip-title="Surface temperature"
+                data-tooltip-source="IPCC / Climate Forcing"
+                data-tooltip-url="https://www.ipcc.ch/"
+                >surface temperatures</span>. Sustained global “<span
+                class="has-tooltip"
+                data-tooltip="An 'impact winter' is long-lived global cooling caused by kilometer-scale impacts like Chicxulub (~66 Myr ago), when sunlight was blocked for years, halting photosynthesis."
+                data-tooltip-title="Impact winter"
+                data-tooltip-source="Chicxulub global effects"
+                data-tooltip-url="https://www.lpi.usra.edu/science/kring/Chicxulub/global-effects/"
+                >impact winter</span>” conditions are linked to kilometer-scale impacts (e.g., Chicxulub) and are not expected from a ~330 m object like Impactor-2025.
+            </p>
+            <div class="data-grid">
+                <div class="data-card">
+                    <div class="data-label">Global "Impact Winter"</div>
+                    <div class="data-value">Unlikely<span class="data-unit">at ~330 m</span></div>
+                </div>
+                <div class="data-card">
+                    <div class="data-label">Cooling Duration</div>
+                    <div class="data-value">Days–months<span class="data-unit">(regional)</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section content-left" id="section-12">
+        <div class="section-number"></div>
+        <h1 class="section-title scramble-text-story">Second Chance</h1>
+        <p class="section-subtitle">180 days to save humanity</p>
+
+        <p class="section-text">
+            With a confirmed <span
+            class="has-tooltip"
+            data-tooltip-title="Warning time"
+            data-tooltip="The interval between reliable impact prediction and the event; it governs which mitigation options are realistic."
+            data-tooltip-source="NASA PDCO"
+            data-tooltip-url="https://www.nasa.gov/planetarydefense/"
+            >180-day warning</span>, catastrophe turns into a solvable logistics problem. In the first week, orbit
+            solutions are refined; by day 30–60, a deflection mission is go/no-go; in parallel, <span
+            class="has-tooltip"
+            data-tooltip-title="Civil protection"
+            data-tooltip="Evacuation planning, sheltering guidance, continuity of power/water/comms, medical resources, firebreaks and ignition control."
+            data-tooltip-source="USGS / FEMA best practices"
+            data-tooltip-url="https://www.usgs.gov/"
+            >civil-protection layers</span> are pre-positioned. Time buys precision—and options.
+        </p>
+
+        <div class="data-grid">
+            <div class="data-card success">
+            <div class="data-label">Warning Time</div>
+            <div class="data-value">180<span class="data-unit">days</span></div>
+            </div>
+            <div class="data-card success">
+            <div class="data-label">Decision Horizon</div>
+            <div class="data-value">30–60<span class="data-unit">days to launch</span></div>
+            </div>
+        </div>
+        </div>
+
+        <div class="content-section content-left" id="section-13">
+        <div class="section-number"></div>
+        <h1 class="section-title scramble-text-story">Early Detection</h1>
+        <p class="section-subtitle">Time is our greatest weapon</p>
+
+        <p class="section-text">
+            Six months of lead time begins with the sky we watch. An integrated network—<span
+            class="has-tooltip"
+            data-tooltip-title="CNEOS / PDCO"
+            data-tooltip="Orbit determination and hazard assessment from survey telescopes and radar."
+            data-tooltip-source="NASA CNEOS & PDCO"
+            data-tooltip-url="https://cneos.jpl.nasa.gov/"
+            >CNEOS/PDCO</span>, the upcoming <span
+            class="has-tooltip"
+            data-tooltip-title="NEO Surveyor"
+            data-tooltip="A dedicated infrared space telescope to find dark, hard-to-see asteroids."
+            data-tooltip-source="NASA NEO Surveyor"
+            data-tooltip-url="https://www.jpl.nasa.gov/missions/neo-surveyor"
+            >NEO Surveyor</span>, and <span
+            class="has-tooltip"
+            data-tooltip-title="Rubin Observatory (LSST)"
+            data-tooltip="Wide-fast-deep optical survey improving discovery & orbit refinement."
+            data-tooltip-source="Rubin/LSST"
+            data-tooltip-url="https://www.lsst.org/"
+            >Rubin/LSST</span>—can spot a 300 m class object when it’s still <span
+            class="has-tooltip"
+            data-tooltip-title="Astronomical Unit (AU)"
+            data-tooltip="Mean Earth–Sun distance ≈ 149.6 million km. 2.6 AU ≈ 389 million km."
+            data-tooltip-source="IAU"
+            data-tooltip-url="https://www.iau.org/public/themes/measuring/"
+            >~2.6 AU</span> away, yielding a true 180-day response window.
+        </p>
+
+        <div class="data-grid">
+            <div class="data-card success">
+            <div class="data-label">Detection Range</div>
+            <div class="data-value">389<span class="data-unit">M km (~2.6 AU)</span></div>
+            </div>
+        </div>
+        </div>
+
+
+<div class="content-section content-left" id="section-14">
+  <div class="section-number"></div>
+  <h1 class="section-title scramble-text-story" style="width: 620px;">Defense Strategies</h1>
+  <p class="section-subtitle">Three paths to salvation</p>
+
+  <p class="section-text">
+    Three proven strategies for planetary defense—each with distinct physics, risks, and lead-time needs. For a
+    <span class="has-tooltip"
+      data-tooltip-title="Scenario"
+      data-tooltip="330 m diameter, ρ≈1.7 g/cm³ (~3.2×10¹⁰ kg) impacting at 25 km/s."
+      data-tooltip-source="Project parameters"
+      data-tooltip-url="#"
+    >330 m object</span> with only
+    <span class="has-tooltip"
+      data-tooltip-title="Warning time"
+      data-tooltip="Time between reliable impact prediction and the event."
+      data-tooltip-source="NASA PDCO"
+      data-tooltip-url="https://www.nasa.gov/planetarydefense/"
+    >180 days</span>, the required along-track change is about
+    <span class="has-tooltip"
+      data-tooltip-title="Required Δv at T–180 d"
+      data-tooltip="Δv ≈ R⊕/t ≈ 6,371 km / 180 days ≈ 0.41 m/s."
+      data-tooltip-source="Back-of-envelope mission sizing"
+      data-tooltip-url="#"
+    >0.41 m/s</span>. That sets the bar for what each method must deliver in time.
+  </p>
+
+  <div class="defense-strategies-grid">
+
+    <!-- KINETIC IMPACTOR -->
+    <div class="strategy-card" data-strategy="kinetic">
+      <div class="strategy-icon">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <circle cx="20" cy="30" r="8" fill="#24D3FF" opacity="0.8"/>
+          <path d="M28 30 L45 30" stroke="#24D3FF" stroke-width="2" stroke-dasharray="2,2"/>
+          <circle cx="45" cy="30" r="12" fill="#FF3C00" opacity="0.6"/>
+          <path d="M33 30 L38 25 M33 30 L38 35" stroke="#ffffff" stroke-width="2"/>
+        </svg>
+      </div>
+      <h3 class="strategy-title">KINETIC IMPACTOR</h3>
+      <p class="strategy-desc">
+        Brute force: a high-velocity spacecraft hits the asteroid to nudge its orbit. Demonstrated by NASA’s DART
+        (2022), which measurably changed Dimorphos’ motion.
+      </p>
+      <div class="strategy-stats">
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Asteroid Δv per 1-t impactor"
+          data-tooltip="Order of ~1 mm/s at ~10 km/s with momentum-enhancement β≈3 for a 3.2×10¹⁰ kg target."
+          data-tooltip-source="DART analyses / momentum scaling"
+          data-tooltip-url="https://dart.jhuapl.edu"
+        >Asteroid Δv: ~1 mm/s / ton</span>
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Viable lead time"
+          data-tooltip="Effective with years–decades (or many impactors). With only 180 days, a single impactor is insufficient for a 330 m body."
+          data-tooltip-source="Mission sizing logic"
+          data-tooltip-url="#"
+        >Lead time: years–decades</span>
+      </div>
+    </div>
+
+    <!-- GRAVITY TRACTOR -->
+    <div class="strategy-card" data-strategy="gravity">
+      <div class="strategy-icon">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <circle cx="30" cy="30" r="12" fill="#FF3C00" opacity="0.6"/>
+          <circle cx="30" cy="15" r="6" fill="#24D3FF" opacity="0.8"/>
+          <path d="M30 21 Q20 25, 20 30 Q20 35, 30 39 Q40 35, 40 30 Q40 25, 30 21"
+                stroke="#24D3FF" stroke-width="1" fill="none" opacity="0.4"/>
+        </svg>
+      </div>
+      <h3 class="strategy-title">GRAVITY TRACTOR</h3>
+      <p class="strategy-desc">
+        Patience and precision: a massive spacecraft “parks” near the asteroid; mutual gravity provides a continuous tug.
+      </p>
+      <div class="strategy-stats">
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Δv accumulation"
+          data-tooltip="~0.01 m/s over 10 years for a ~20 t spacecraft hovering with ~1 N effective tug."
+          data-tooltip-source="Gravity tractor trade studies"
+          data-tooltip-url="#"
+        >Δv in 10 yr: ~0.01 m/s</span>
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Viable lead time"
+          data-tooltip="Needs decade-class lead times; exquisite navigation/operations."
+          data-tooltip-source="Mission ops"
+          data-tooltip-url="#"
+        >Lead time: 10+ years</span>
+      </div>
+    </div>
+
+    <!-- LASER ABLATION -->
+    <div class="strategy-card" data-strategy="laser">
+      <div class="strategy-icon">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <circle cx="40" cy="30" r="12" fill="#FF3C00" opacity="0.6"/>
+          <path d="M5 30 L28 30" stroke="#24D3FF" stroke-width="3" opacity="0.9"/>
+          <path d="M28 30 L32 28 M28 30 L32 32" stroke="#24D3FF" stroke-width="2"/>
+          <ellipse cx="42" cy="28" rx="4" ry="8" fill="#ffffff" opacity="0.7" transform="rotate(30 42 28)"/>
+        </svg>
+      </div>
+      <h3 class="strategy-title">LASER ABLATION</h3>
+      <p class="strategy-desc">
+        The “cosmic scalpel”: intense beams vaporize surface material; the plume’s reaction force pushes the asteroid.
+        Technically promising, but not yet operational.
+      </p>
+      <div class="strategy-stats">
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Power & thrust"
+          data-tooltip="Multi-MW optical power could yield ~0.05–0.5 m/s over 1–3 years, depending on coupling, rotation, and stand-off."
+          data-tooltip-source="DE-STAR / laser ablation studies"
+          data-tooltip-url="#"
+        >Δv (1–3 yr): ~0.05–0.5 m/s</span>
+        <span class="stat-item has-tooltip"
+          data-tooltip-title="Technology readiness"
+          data-tooltip="Concept under study; requires large phased arrays or close-range beaming and robust target coupling."
+          data-tooltip-source="TRL note"
+          data-tooltip-url="#"
+        >Status: experimental</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<div class="content-section content-left" id="section-15">
+  <div class="section-number"></div>
+  <h1 class="section-title scramble-text-story">Kinetic Impact</h1>
+  <p class="section-subtitle">DART: Humanity's first planetary defense success</p>
+
+  <p class="section-text">
+    September 26, 2022. NASA’s DART spacecraft struck Dimorphos at
+    <span class="has-tooltip"
+      data-tooltip-title="Impact speed"
+      data-tooltip="~6.1 km/s (~14,000 mph) relative speed at impact; value reported by NASA."
+      data-tooltip-source="NASA"
+      data-tooltip-url="https://www.nasa.gov/planetarydefense/dart/"
+    >~6.1 km/s</span>, proving we can alter an asteroid system’s motion.
+    The <span class="has-tooltip"
+      data-tooltip-title="Spacecraft mass"
+      data-tooltip="~570 kg at impact."
+      data-tooltip-source="NASA"
+      data-tooltip-url="https://dart.jhuapl.edu"
+    >570 kg</span> impact changed the moonlet’s orbital period by
+    <span class="has-tooltip"
+      data-tooltip-title="Measured period change"
+      data-tooltip="Observed reduction ≈ 32 minutes, exceeding the ≥73-second success threshold by a wide margin."
+      data-tooltip-source="NASA press/analysis"
+      data-tooltip-url="https://www.nasa.gov/press-release/nasa-confirms-dart-mission-impact-changed-asteroid-s-motion-in-space"
+    >~32 minutes</span>. This is no longer theory—we have measurably moved a small body.
+  </p>
+
+  <div class="data-grid">
+    <div class="data-card success">
+      <div class="data-label">Impact Speed</div>
+      <div class="data-value">6.1<span class="data-unit">km/s</span></div>
+    </div>
+    <div class="data-card success">
+      <div class="data-label">Orbit Change</div>
+      <div class="data-value">32<span class="data-unit">minutes</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Spacecraft Mass</div>
+      <div class="data-value">570<span class="data-unit">kg</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Success</div>
+      <div class="data-value">Confirmed</div>
+    </div>
+  </div>
+</div>
+
+
+        <div class="content-section content-left" id="section-16">
+        <div class="section-number"></div>
+        <h1 class="section-title scramble-text-story">Gravity Tractor</h1>
+        <p class="section-subtitle">The gentle guardian</p>
+
+        <p class="section-text">
+            No impact. No explosion. Just Newton’s gravity. A
+            <span class="has-tooltip"
+            data-tooltip-title="Spacecraft mass"
+            data-tooltip="~20,000 kg hovering alongside the asteroid."
+            data-tooltip-source="Concept trades"
+            data-tooltip-url="#"
+            >20-ton spacecraft</span> hovers
+            <span class="has-tooltip"
+            data-tooltip-title="Standoff (surface to spacecraft)"
+            data-tooltip="~50 m off the surface ≈ 215 m center-to-center for a 330 m body."
+            data-tooltip-source="Mission geometry"
+            data-tooltip-url="#"
+            >50 m</span> from Impactor-2025 and its gravitational pull slowly tugs the asteroid off course. Over years, this
+            whisper of force accumulates into salvation—precise, predictable, and reversible.
+        </p>
+
+        <div class="data-grid">
+            <div class="data-card">
+            <div class="data-label">Station Distance</div>
+            <div class="data-value">50<span class="data-unit">meters</span></div>
+            </div>
+            <div class="data-card">
+            <div class="data-label">Pull Force</div>
+            <div class="data-value">≈0.92<span class="data-unit">N</span></div>
+            </div>
+            <div class="data-card success">
+            <div class="data-label">Deflection / Year</div>
+            <div class="data-value">~14<span class="data-unit">km</span></div>
+            </div>
+            <div class="data-card">
+            <div class="data-label">Ion Thrust</div>
+            <div class="data-value">≥1.0<span class="data-unit">N</span></div>
+            </div>
+        </div>
+        </div>
+
+
+<div class="content-section content-left" id="section-17">
+  <div class="section-number"></div>
+  <h1 class="section-title scramble-text-story">Laser Ablation</h1>
+  <p class="section-subtitle">Turning sunlight into salvation</p>
+
+  <p class="section-text">
+    DE-STAR: a phased-array “laser sail” for asteroids. A km-class solar array feeds a
+    <span class="has-tooltip"
+      data-tooltip-title="Optical power on target"
+      data-tooltip="Order-of-magnitude concept: ~100 MW continuous optical power at 1 AU."
+      data-tooltip-source="DE-STAR studies"
+      data-tooltip-url="#"
+    >~100 MW</span> beam that heats Impactor-2025’s surface to incandescence. The vaporized rock jets away, acting like a
+    rocket plume and pushing the body. No docking, no contact—the ultimate standoff technique.
+  </p>
+
+  <div class="data-grid">
+    <div class="data-card">
+      <div class="data-label">Laser Power</div>
+      <div class="data-value">100<span class="data-unit">MW</span></div>
+    </div>
+    <div class="data-card success">
+      <div class="data-label">Effective Range</div>
+      <div class="data-value">1<span class="data-unit">AU</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Thrust Generated</div>
+      <div class="data-value">~30<span class="data-unit">N</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Mass Ejected / Day</div>
+      <div class="data-value">~1.3<span class="data-unit">t</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="content-section content-left" id="section-18">
+  <div class="section-number"></div>
+  <h1 class="section-title scramble-text-story">Damage Mitigation</h1>
+  <p class="section-subtitle">When deflection is no longer possible</p>
+
+  <p class="section-text">
+    With impact confirmed, the focus shifts to saving as many lives as possible.
+    The response is layered: evacuation of critical zones, immediate shelter for those who cannot move,
+    protection against debris and shockwaves, fire prevention, and air/water planning for days.
+    The goal: minimize casualties, preserve vital services, and speed recovery.
+    <span class="has-tooltip"
+      data-tooltip-title="Why 72 hours?"
+      data-tooltip="~72 h is a realistic last window of certainty for final evacuations and sheltering once deflection is off the table."
+      data-tooltip-source="NASA PDCO"
+      data-tooltip-url="https://www.nasa.gov/planetarydefense/"></span>
+    <span class="has-tooltip"
+      data-tooltip-title="Shock & glass ranges"
+      data-tooltip="≤200 km for severe shock damage; glass breakage up to ~300 km for a ~2.4 Gt event (scaled from impact models and analogs)."
+      data-tooltip-source="Earth Impact Effects Program"
+      data-tooltip-url="https://impact.ese.ic.ac.uk/ImpactEarth/"></span>
+  </p>
+
+  <div class="data-grid">
+    <div class="data-card">
+      <div class="data-label">Warning Window</div>
+      <div class="data-value">72<span class="data-unit">h</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Shockwave Zone</div>
+      <div class="data-value">≲200<span class="data-unit">km</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Glass Shatter Zone</div>
+      <div class="data-value">up to 300<span class="data-unit">km (airburst)</span></div>
+    </div>
+    <div class="data-card">
+      <div class="data-label">Shelter Capacity</div>
+      <div class="data-value">≥3.4<span class="data-unit">M</span></div>
+    </div>
+  </div>
+
+  <a href="simulator.html" class="hero-button">
+    <span>Launch Simulator →</span>
+  </a>
+</div>
+
+
+
+
+        <div class="content-section content-left" id="section-19">
+            <div class="section-number"></div>
+            <h1 class="section-title scramble-text-story">!mpacts Simulator</h1>
+            <p class="section-subtitle">intuitive controls and dynamic visualizations, animated trajectories and impact zones</p>
+            <p class="section-text">
+                !mpacts is our interactive simulator built on real NASA NEO and USGS data. Explore trajectories, estimate impact energy, and visualize hazard zones with intuitive controls.
+            </p>
+             <a href="simulador.html" class="hero-button">
+                <span>Launch Simulator →</span>
+            </a>
+        </div>
+    </div>
+
+    <nav class="nav-ruler">
+        <div class="ruler-track">
+            <div class="ruler-markers" id="ruler-markers"></div>
+            <div class="ruler-indicator" id="ruler-indicator"></div>
+        </div>
+    </nav>
+
+    <div class="hud-element hud-top-left">
+        <div>!MPACTS</div>
+        <div id="current-date">2025.09.17</div>
+    </div>
+    
+    <div class="hud-element hud-top-right">
+        <div>DISTANCE TO EARTH</div>
+        <div class="hud-distance" id="distance">500,000 KM</div>
+    </div>
+
+    <div class="warning-overlay" id="warning-overlay"></div>
+    
+    <div class="success-overlay" id="success-overlay"></div>
+    
+    <div class="impact-alert" id="impact-alert">!MPACT</div>
+    
+    <div class="info-panel" id="info-panel">
+        <div id="info-panel-content-wrapper">
+            <div class="info-title">NASA Resources</div>
+            <div class="info-content" id="info-content">
+                Access real-time data from NASA's Near-Earth Object tracking system and explore asteroid impact scenarios.
+            </div>
+            <div class="info-stats" id="info-stats">
+                <div class="info-stat">
+                    <div class="info-stat-label">PHAs Tracked</div>
+                    <div class="info-stat-value">2,354</div>
+                </div>
+                <div class="info-stat">
+                    <div class="info-stat-label">Close Approaches</div>
+                    <div class="info-stat-value">147</div>
+                </div>
+            </div>
+            <div style="display: grid;" id="info-links">
+                <a href="https://api.nasa.gov/neo" target="_blank" class="info-link">NASA NEO API</a>
+                <a href="https://cneos.jpl.nasa.gov" target="_blank" class="info-link">CNEOS</a>
+            </div>
+        </div>
+        
+        <div class="preview-container">
+            <div class="preview-window">
+                <div class="preview-content" id="preview-content">
+                    <div class="preview-loading">HOVER OVER A LINK</div>
+                </div>
+                <div class="preview-label" id="preview-label">PREVIEW</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="learn-more-button" id="learn-more-button">
+        <span>Scroll down OR</span>
+        <span>↓Down arrow in your keyboard</span>
+    <div class="arrows">
+        <div class="arrow-wrapper">
+            <div class="arrow"></div>
+        </div>
+        <div class="arrow-wrapper">
+            <div class="arrow"></div>
+        </div>
+    </div>
+    </div>
+    
+    <div class="bottom-left-controls">
+        <button class="control-button" id="free-look-toggle">
+            Press [L] to enable free look
+        </button>
+        <button class="control-button" onclick="skipToEnd()">
+            Skip to the end
+        </button>
+    </div>
+
+    <div class="bottom-right-controls">
+       <a href="./simulator.html"><button class="control-button2 scramble-text-story">
+            Skip To Simulator
+        </button></a>
+    </div>
+    
+   
+</div>
+
+
+
+<script>
+/* ---------- Intro Scrambler (RANDOM_CHARS) ---------- */
+const RANDOM_CHARS = 'qwertyuiopasdfghjklzxcvbnmABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*';
+
+class IntroScrambler {
+    constructor() { this._tick = null; }
+    scramble(el, duration = 20, hold = 10) {
+        if (!el) return;
+        const original = el.getAttribute('data-final') || el.innerHTML;
+        el.setAttribute('data-final', original);
+
+        // Trabalha apenas no texto visível (ignora tags internas como <span>)
+        const plain = el.textContent;
+        const len = plain.length;
+
+        let start = performance.now();
+        el.classList.add('animating');
+
+        const frame = (now) => {
+            const t = Math.min(1, (now - start) / duration);
+            const reveal = Math.floor(len * t);
+            // monta o texto: revelados + aleatórios
+            let out = '';
+            for (let i = 0; i < len; i++) {
+                if (i < reveal) {
+                    out += plain[i];
+                } else if (plain[i] === ' ') {
+                    out += ' ';
+                } else {
+                    out += RANDOM_CHARS[(Math.random() * RANDOM_CHARS.length) | 0];
+                }
+            }
+            el.textContent = out;
+
+            if (t < 1) {
+                this._tick = requestAnimationFrame(frame);
+            } else {
+                // garante o original perfeito e mantém um pequeno hold
+                el.textContent = plain;
+                setTimeout(() => el.classList.remove('animating'), hold);
+            }
+        };
+        cancelAnimationFrame(this._tick);
+        this._tick = requestAnimationFrame(frame);
+    }
+}
+const introScrambler = new IntroScrambler();
+/* ---------------------------------------------------- */
+
+// Three.js Setup para Terra em wireframe da introdução
+let introScene, introCamera, introRenderer;
+let introAnimationId, particles;
+
+function createParticleTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const context = canvas.getContext('2d');
+    const gradient = context.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width/2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.1)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    return new THREE.CanvasTexture(canvas);
+}
+
+function initIntroScene() {
+    introScene = new THREE.Scene();
+    introCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    introCamera.position.z = 5;
+    const canvas = document.getElementById('intro-canvas');
+    introRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    introRenderer.setSize(window.innerWidth, window.innerHeight);
+    introRenderer.setClearColor(0x000000, 0);
+
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particlesCount = 5000;
+    const positions = new Float32Array(particlesCount * 3);
+    for (let i = 0; i < particlesCount; i++) {
+        let v = new THREE.Vector3();
+        v.x = Math.random() * 2 - 1;
+        v.y = Math.random() * 2 - 1;
+        v.z = Math.random() * 2 - 1;
+        v.normalize(); v.multiplyScalar(Math.random() * 10 + 200);
+        positions[i*3] = v.x; positions[i*3+1] = v.y; positions[i*3+2] = v.z;
+    }
+    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const particleTexture = createParticleTexture();
+    const particlesMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, map: particleTexture, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    particles = new THREE.Points(particlesGeometry, particlesMaterial);
+    introScene.add(particles);
+    animateIntro();
+}
+
+function animateIntro() {
+    introAnimationId = requestAnimationFrame(animateIntro);
+    if (particles) particles.rotation.y += 0.0001;
+    introRenderer.render(introScene, introCamera);
+}
+
+class IntroTextSequence {
+    constructor() {
+        this.texts = document.querySelectorAll('.intro-text');
+        this.currentIndex = 0;
+        this.duration = 5000;
+        this.isPlaying = false;
+        this.intervalId = null;
+        this.skipButton = document.getElementById('skipIntro');
+        this.container = document.getElementById('introContainer');
+        this.bindEvents();
+    }
+    start() {
+        if (this.isPlaying) return;
+        this.isPlaying = true;
+        this.showText(0);
+        this.intervalId = setInterval(() => this.nextText(), this.duration);
+    }
+    showText(index) {
+        // limpa estados anteriores
+        this.texts.forEach(text => { text.classList.remove('active','animating'); });
+        // ativa o atual + scramble RANDOM_CHARS
+        const el = this.texts[index];
+        if (el) {
+            el.classList.add('active','animating');
+            // dispara o efeito de letras aleatórias
+            introScrambler.scramble(el, 1200);
+            this.currentIndex = index;
+        }
+    }
+    nextText() {
+        this.currentIndex++;
+        if (this.currentIndex >= this.texts.length) {
+            this.end();
+        } else {
+            this.showText(this.currentIndex);
+        }
+    }
+    skip() { this.end(); }
+    end() {
+        if (!this.isPlaying) return;
+        if (this.intervalId) clearInterval(this.intervalId);
+        this.isPlaying = false;
+        this.container.classList.add('hidden');
+        if (introAnimationId) cancelAnimationFrame(introAnimationId);
+
+        // Inicia experiência principal (mantido)
+        if (typeof window.startMainExperience === 'function') {
+            console.log("Intro finished, starting main experience immediately.");
+            window.startMainExperience();
+        }
+        setTimeout(() => { if (this.container) this.container.remove(); }, 2000);
+    }
+    bindEvents() {
+        this.skipButton.addEventListener('click', () => this.skip());
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.isPlaying) this.skip(); });
+    }
+}
+
+window.addEventListener('load', () => {
+    initIntroScene();
+    const sequence = new IntroTextSequence();
+    setTimeout(() => sequence.start(), 1000);
+});
+window.addEventListener('resize', () => {
+    if (introCamera && introRenderer) {
+        introCamera.aspect = window.innerWidth / window.innerHeight;
+        introCamera.updateProjectionMatrix();
+        introRenderer.setSize(window.innerWidth, window.innerHeight);
+    }
+});
+</script>
+
+<script>
+(function () {
+  const el = document.getElementById('current-date');
+  if (!el) return;
+
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+
+  // same style as your current markup: 2025.09.17
+  el.textContent = `${yyyy}.${mm}.${dd}`;
+})();
+</script>
+    
+<script src="js/main.js"></script>
+
+<!-- Upgrade: dynamic Skip button (end ⇄ top) -->
+<script>
+/**
+ * Without touching main.js:
+ * - Override skipToEnd() to be context-aware;
+ * - Keep the original HTML attribute onclick="skipToEnd()" so existing code
+ *   that queries by this attribute continues to work (e.g., hiding on Take 08).
+ */
+(function () {
+  const total = (typeof window.totalSections === 'number') ? window.totalSections : 20;
+
+  function getSkipBtn() {
+    return document.querySelector('.bottom-left-controls button[onclick="skipToEnd()"]');
+  }
+
+  function updateSkipLabel() {
+    const btn = getSkipBtn();
+    if (!btn) return;
+    try {
+      if (typeof window.currentSection === 'number' && window.currentSection >= total - 1) {
+        btn.textContent = 'Skip to the top';
+      } else {
+        btn.textContent = 'Skip to the end';
+      }
+    } catch (e) { /* no-op */ }
+  }
+
+  // Override global skipToEnd keeping the same name used in HTML
+  const originalSkipToEnd = window.skipToEnd;
+  window.skipToEnd = function () {
+    const atEnd = (typeof window.currentSection === 'number' && window.currentSection >= total - 1);
+    if (atEnd) {
+      // go back to Take 01 (index 0)
+      if (typeof window.navigateToSection === 'function') window.navigateToSection(0);
+    } else {
+      // go to last take
+      if (typeof window.navigateToSection === 'function') window.navigateToSection(total - 1);
+    }
+    updateSkipLabel();
+  };
+
+  // Keep label in sync whenever navigation happens
+  if (typeof window.navigateToSection === 'function') {
+    const _nav = window.navigateToSection;
+    window.navigateToSection = function () {
+      const r = _nav.apply(this, arguments);
+      try { updateSkipLabel(); } catch (e) {}
+      return r;
+    };
+  }
+
+  // First pass
+  updateSkipLabel();
+
+  // Safety: also refresh label shortly after startup
+  setTimeout(updateSkipLabel, 250);
+})();
+</script>
+
+</body>
+</html>
