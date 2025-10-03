@@ -767,144 +767,264 @@
         });
     </script>
 
-    <script>
-        // ========== TYPEWRITER SCRAMBLE ANIMATION ==========
-        const RANDOM_CHARS = '!%$#@*ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+<script>
+// ========== TYPEWRITER SCRAMBLE ANIMATION - VERSÃO CORRIGIDA ==========
+const RANDOM_CHARS = '!%$#@*ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+// Configurações
+const CONFIG = {
+    typeSpeed: 0,
+    scrambleTime: 100,
+    changeRate: 30,
+    autoRepeat: 10000,
+    cascadeDelay: 300
+};
+
+class TypewriterScramble {
+    constructor(element) {
+        this.element = element;
+        this.originalText = element.getAttribute('data-text') || element.textContent;
+        this.currentText = '';
+        this.position = 0;
+        this.intervals = [];
+        this.timeouts = [];
+        this.isAnimating = false;
+        this.isPaused = false;
+        this.lastActiveTime = Date.now();
         
-        // Configurações
-        const CONFIG = {
-            typeSpeed: 0,
-            scrambleTime: 100,
-            changeRate: 30,
-            autoRepeat: 10000,
-            cascadeDelay: 300
-        };
+        // Detectar mudanças de visibilidade da página
+        this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
         
-        class TypewriterScramble {
-            constructor(element) {
-                this.element = element;
-                this.originalText = element.getAttribute('data-text') || element.textContent;
-                this.currentText = '';
-                this.position = 0;
-                this.intervals = [];
-                this.timeouts = [];
+        setTimeout(() => this.animate(), 100);
+    }
+    
+    handleVisibilityChange() {
+        if (document.hidden) {
+            // Página ficou oculta - pausar animações
+            this.isPaused = true;
+            this.stop();
+        } else {
+            // Página ficou visível novamente
+            this.isPaused = false;
+            this.lastActiveTime = Date.now();
+            
+            // Resetar o texto para o estado original se estava animando
+            if (this.isAnimating) {
+                this.element.textContent = this.originalText;
                 this.isAnimating = false;
-                
-                setTimeout(() => this.animate(), 100);
+            }
+        }
+    }
+    
+    getRandomChar() {
+        return RANDOM_CHARS[Math.floor(Math.random() * RANDOM_CHARS.length)];
+    }
+    
+    async animate() {
+        // Não animar se a página está oculta ou já está animando
+        if (this.isAnimating || this.isPaused || document.hidden) return;
+        
+        this.isAnimating = true;
+        this.reset();
+        this.element.textContent = '';
+        this.currentText = '';
+        this.position = 0;
+        
+        this.element.classList.add('animating');
+        
+        for (let i = 0; i < this.originalText.length; i++) {
+            // Verificar se deve parar a animação
+            if (this.isPaused || document.hidden) {
+                this.stop();
+                this.element.textContent = this.originalText;
+                return;
             }
             
-            getRandomChar() {
-                return RANDOM_CHARS[Math.floor(Math.random() * RANDOM_CHARS.length)];
+            await this.addCharacter(i);
+            await this.wait(CONFIG.typeSpeed);
+        }
+        
+        setTimeout(() => {
+            if (!this.isPaused && !document.hidden) {
+                this.element.classList.remove('animating');
+                this.isAnimating = false;
+            }
+        }, 500);
+    }
+    
+    addCharacter(index) {
+        return new Promise((resolve) => {
+            // Verificar se deve parar antes de adicionar caractere
+            if (this.isPaused || document.hidden) {
+                resolve();
+                return;
             }
             
-            async animate() {
-                if (this.isAnimating) return;
-                
-                this.isAnimating = true;
-                this.reset();
-                this.element.textContent = '';
-                this.currentText = '';
-                this.position = 0;
-                
-                this.element.classList.add('animating');
-                
-                for (let i = 0; i < this.originalText.length; i++) {
-                    await this.addCharacter(i);
-                    await this.wait(CONFIG.typeSpeed);
+            // Garantir que não ultrapasse o tamanho original
+            if (index >= this.originalText.length) {
+                resolve();
+                return;
+            }
+            
+            this.currentText += this.getRandomChar();
+            
+            // Limitar o texto ao tamanho original
+            if (this.currentText.length > this.originalText.length) {
+                this.currentText = this.currentText.substring(0, this.originalText.length);
+            }
+            
+            this.element.textContent = this.currentText;
+            
+            const interval = setInterval(() => {
+                if (this.isPaused || document.hidden) {
+                    clearInterval(interval);
+                    return;
                 }
                 
-                setTimeout(() => {
-                    this.element.classList.remove('animating');
-                    this.isAnimating = false;
-                }, 500);
-            }
-            
-            addCharacter(index) {
-                return new Promise((resolve) => {
-                    this.currentText += this.getRandomChar();
+                const chars = this.currentText.split('');
+                if (index < chars.length) {
+                    chars[index] = this.getRandomChar();
+                    this.currentText = chars.join('');
                     this.element.textContent = this.currentText;
-                    
-                    const interval = setInterval(() => {
-                        const chars = this.currentText.split('');
-                        chars[index] = this.getRandomChar();
-                        this.currentText = chars.join('');
-                        this.element.textContent = this.currentText;
-                    }, CONFIG.changeRate);
-                    
-                    this.intervals.push(interval);
-                    
-                    const timeout = setTimeout(() => {
-                        clearInterval(interval);
-                        const chars = this.currentText.split('');
+                }
+            }, CONFIG.changeRate);
+            
+            this.intervals.push(interval);
+            
+            const timeout = setTimeout(() => {
+                clearInterval(interval);
+                
+                if (!this.isPaused && !document.hidden) {
+                    const chars = this.currentText.split('');
+                    if (index < this.originalText.length && index < chars.length) {
                         chars[index] = this.originalText[index];
                         this.currentText = chars.join('');
                         this.element.textContent = this.currentText;
-                        resolve();
-                    }, CONFIG.scrambleTime);
-                    
-                    this.timeouts.push(timeout);
-                });
-            }
-            
-            wait(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-            
-            stop() {
-                this.intervals.forEach(interval => clearInterval(interval));
-                this.timeouts.forEach(timeout => clearTimeout(timeout));
-                this.intervals = [];
-                this.timeouts = [];
-                this.isAnimating = false;
-                this.element.classList.remove('animating');
-            }
-            
-            reset() {
-                this.stop();
-                this.currentText = '';
-                this.position = 0;
-            }
-            
-            trigger() {
-                if (!this.isAnimating) {
-                    this.animate();
+                    }
                 }
-            }
+                resolve();
+            }, CONFIG.scrambleTime);
+            
+            this.timeouts.push(timeout);
+        });
+    }
+    
+    wait(ms) {
+        return new Promise(resolve => {
+            const timeout = setTimeout(resolve, ms);
+            this.timeouts.push(timeout);
+        });
+    }
+    
+    stop() {
+        this.intervals.forEach(interval => clearInterval(interval));
+        this.timeouts.forEach(timeout => clearTimeout(timeout));
+        this.intervals = [];
+        this.timeouts = [];
+        this.isAnimating = false;
+        this.element.classList.remove('animating');
+    }
+    
+    reset() {
+        this.stop();
+        this.currentText = '';
+        this.position = 0;
+    }
+    
+    trigger() {
+        if (!this.isAnimating && !this.isPaused && !document.hidden) {
+            this.animate();
+        }
+    }
+    
+    destroy() {
+        this.stop();
+        document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+}
+
+// ========== INICIALIZAÇÃO ==========
+document.addEventListener('DOMContentLoaded', function() {
+    const animations = [];
+    let autoRepeatInterval = null;
+    
+    const elements = document.querySelectorAll('.scramble-text');
+    elements.forEach((element, index) => {
+        if (!element.getAttribute('data-text')) {
+            element.setAttribute('data-text', element.textContent);
         }
         
-        // ========== INICIALIZAÇÃO ==========
-        document.addEventListener('DOMContentLoaded', function() {
-            const animations = [];
-            
-            const elements = document.querySelectorAll('.scramble-text');
-            elements.forEach((element, index) => {
-                if (!element.getAttribute('data-text')) {
-                    element.setAttribute('data-text', element.textContent);
-                }
-                
-                setTimeout(() => {
-                    const instance = new TypewriterScramble(element);
-                    animations.push(instance);
-                }, index * CONFIG.cascadeDelay);
-            });
-            
-            window.triggerScramble = function() {
-                animations.forEach((instance, index) => {
-                    setTimeout(() => {
-                        instance.trigger();
-                    }, index * CONFIG.cascadeDelay);
-                });
-            };
-            
-            setInterval(() => {
-                if (!animations.some(a => a.isAnimating)) {
-                    window.triggerScramble();
-                }
-            }, CONFIG.autoRepeat);
-            
-            console.log('%c🚀 !MPACT LOADED', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+        setTimeout(() => {
+            const instance = new TypewriterScramble(element);
+            animations.push(instance);
+        }, index * CONFIG.cascadeDelay);
+    });
+    
+    window.triggerScramble = function() {
+        // Só executar se a página está visível
+        if (document.hidden) return;
+        
+        animations.forEach((instance, index) => {
+            setTimeout(() => {
+                instance.trigger();
+            }, index * CONFIG.cascadeDelay);
         });
-    </script>
+    };
+    
+    // Gerenciar auto-repeat com controle de visibilidade
+    function startAutoRepeat() {
+        if (autoRepeatInterval) {
+            clearInterval(autoRepeatInterval);
+        }
+        
+        autoRepeatInterval = setInterval(() => {
+            // Só executar se a página está visível e nenhuma animação está rodando
+            if (!document.hidden && !animations.some(a => a.isAnimating)) {
+                window.triggerScramble();
+            }
+        }, CONFIG.autoRepeat);
+    }
+    
+    // Pausar/retomar baseado na visibilidade
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            // Pausar auto-repeat quando oculto
+            if (autoRepeatInterval) {
+                clearInterval(autoRepeatInterval);
+                autoRepeatInterval = null;
+            }
+        } else {
+            // Retomar auto-repeat quando visível
+            // Aguardar um pouco para estabilizar antes de retomar
+            setTimeout(() => {
+                // Resetar texto de todos os elementos para o estado correto
+                animations.forEach(animation => {
+                    if (animation.element) {
+                        animation.element.textContent = animation.originalText;
+                        animation.element.classList.remove('animating');
+                    }
+                });
+                
+                startAutoRepeat();
+            }, 500);
+        }
+    });
+    
+    // Iniciar auto-repeat
+    startAutoRepeat();
+    
+    // Cleanup quando a página for fechada
+    window.addEventListener('beforeunload', () => {
+        animations.forEach(animation => animation.destroy());
+        if (autoRepeatInterval) {
+            clearInterval(autoRepeatInterval);
+        }
+    });
+    
+    console.log('%c🚀 !MPACT LOADED - Com proteção contra bugs de visibilidade', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+});
+</script>
 
     <!-- ========== METEOR ANIMATION ========== -->
     <script>
