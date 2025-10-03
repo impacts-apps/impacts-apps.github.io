@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Impacts — Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#0a0a0a; --fg:#ffffff; --muted: rgba(255,255,255,.72);
+  --accent:#24D3FF; --glass: rgba(255,255,255,.1);
+  --num-raise: -300%;
+}
+
+*{ box-sizing:border-box }
+html,body{ height:100%; margin:0; overflow-x:hidden; } /* impede barra horizontal */
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  line-height:1.4;
+}
+
+/* === Fundo estelar (canvas fixo) === */
+#space-bg{
+  position:fixed; inset:0; width:100%; height:100%;
+  display:block; z-index:0; pointer-events:none;
+}
+body > *:not(#space-bg){ position:relative; z-index:1; }
+
+/* label */
+.now-showing{
+  position:fixed; top:16px; left:16px; z-index:30; user-select:none;
+  display:flex; align-items:center; gap:8px;
+  color:var(--accent); font-weight:600; font-size:.9rem; letter-spacing:.02em;
+}
+.now-showing::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--accent) }
+
+/* === ACCORDION (estrutura mantida) === */
+.accordion-wrap{ width:min(1280px,95vw); margin:clamp(12px,4vmin,32px) auto; padding-top:48px; }
+.accordion{ display:flex; gap:1em; height:clamp(360px,70vh,720px); transform:skew(5deg); overflow:hidden; }
+.card{
+  position:relative; flex:1 1 0; height:100%; border-radius:12px; overflow:hidden; cursor:pointer;
+  transition:flex-grow 1s ease, filter 1s ease; filter:grayscale(100%);
+  box-shadow:0 30px 60px rgba(0,0,0,.45); text-decoration:none; color:inherit;
+}
+.card:hover{ flex-grow:8; filter:grayscale(0) }
+.card img{ width:100%; height:100%; object-fit:cover; transform:scale(1.04); transition:transform 1s ease }
+.card:hover img{ transform:scale(1.08) }
+.card::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(180deg, transparent 40%, rgba(0,0,0,.65) 86%);
+  pointer-events:none;
+}
+
+/* Conteúdo à esquerda */
+.card .content{
+  position:absolute;
+  left:clamp(16px,2.6vmin,28px);
+  right:clamp(16px,2.6vmin,28px);
+  bottom:clamp(16px,2.6vmin,28px);
+  z-index:2;
+  transform:skew(-5deg);
+  text-align:left;
+  max-width:min(52ch, 60%);
+}
+
+/* Micro-detalhes */
+.number{ position:absolute; left:0; bottom:0; font-size:clamp(40px,12vmin,100px); font-weight:300; line-height:1; color:rgba(255,255,255,.45); transition:.8s cubic-bezier(.4,0,.2,1) }
+.card:hover .number{ transform:translateY(var(--num-raise)) }
+.title{ font-weight:800; font-size:clamp(22px,3.6vmin,38px); margin:0 0 6px; opacity:0; transform:translateY(26px); transition:.6s cubic-bezier(.4,0,.2,1) }
+.card:hover .title{ opacity:1; transform:translateY(0); transition-delay:.25s }
+.subtitle{ color:var(--muted); margin:0 0 14px; font-size:clamp(13px,1.6vmin,17px); opacity:0; transform:translateY(26px); transition:.6s cubic-bezier(.4,0,.2,1) }
+.card:hover .subtitle{ opacity:1; transform:translateY(0); transition-delay:.35s }
+.specs{ margin-top:4px }
+.spec-row{ display:flex; align-items:center; gap:8px; font-size:clamp(12px,1.6vmin,14px); opacity:0; transform:translateX(-18px); transition:.45s cubic-bezier(.4,0,.2,1) }
+.card:hover .spec-row{ opacity:1; transform:translateX(0) }
+.card:hover .spec-row:nth-child(1){ transition-delay:.48s }
+.card:hover .spec-row:nth-child(2){ transition-delay:.56s }
+.spec-label{ color:var(--muted) } .spec-value{ color:#fff; font-weight:600 }
+.badges{ display:flex; gap:10px; margin-top:12px; opacity:0; transform:translateY(26px); transition:.6s cubic-bezier(.4,0,.2,1) }
+.card:hover .badges{ opacity:1; transform:translateY(0); transition-delay:.75s }
+.badge{ display:flex; align-items:center; gap:6px; padding:4px 8px; background:var(--glass); border-radius:12px; font-size:12px; font-weight:600; opacity:0; transform:scale(.85); transition:.3s cubic-bezier(.4,0,.2,1); backdrop-filter:blur(6px) }
+.card:hover .badge{ opacity:1; transform:scale(1) }
+.card:hover .badge:nth-child(1){ transition-delay:.82s }
+.card:hover .badge:nth-child(2){ transition-delay:.90s }
+.badge i{ width:8px; height:8px; border-radius:50%; background:var(--accent); display:block }
+.cta-button{ position:absolute; right:clamp(16px,2.6vmin,28px); bottom:clamp(16px,2.6vmin,28px); width:40px; height:40px; border-radius:50%; border:2px solid var(--accent); background:transparent; z-index:3; display:flex; align-items:center; justify-content:center; transition:.35s ease; pointer-events:none }
+.cta-button::before,.cta-button::after{ content:""; position:absolute; transition:.35s ease }
+.cta-button::before{ width:16px; height:2px; background:var(--accent); left:10px; top:50%; transform:translateY(-50%) }
+.cta-button::after{ width:8px; height:8px; border-right:2px solid var(--accent); border-top:2px solid var(--accent); right:10px; top:50%; transform:translateY(-50%) rotate(45deg) }
+.card:hover .cta-button{ transform:translateX(2px) }
+
+/* Features */
+.features{ background:#0a0a0a; margin-top:clamp(28px,6vmin,60px); padding:clamp(40px,7vmin,96px) 16px; border-radius:14px 14px 0 0 }
+.features .container{ width:min(1100px,94vw); margin:0 auto }
+.features .row{ display:flex; flex-wrap:wrap; gap:24px }
+.features .col{ flex:1 1 260px }
+.features .product-box h3{ margin:0 0 10px; font-weight:700; font-size:clamp(18px,2.4vmin,24px); color:#ffffff }
+.features .product-box p{ margin:0; color:#a6a6a6; font-size:clamp(14px,1.8vmin,16px) }
+</style>
+</head>
+<body>
+
+<!-- canvas do fundo -->
+<canvas id="space-bg" aria-hidden="true"></canvas>
+
+<div class="now-showing">Impacts — Dashboard</div>
+
+<main class="accordion-wrap" aria-label="Main modules">
+  <div class="accordion">
+    <a class="card" href="story.html" aria-label="Open storytelling">
+      <img src="story.gif" alt="" />
+      <div class="content">
+        <h3 class="title">Impacts — Story</h3>
+        <p class="subtitle">Interactive narrative in 20 takes</p>
+        <div class="specs">
+          <div class="spec-row"><span class="spec-label">Navigation:</span><span class="spec-value">Scroll, arrows & timeline</span></div>
+          <div class="spec-row"><span class="spec-label">Data:</span><span class="spec-value">NASA NEO & USGS</span></div>
+        </div>
+        <div class="badges">
+          <span class="badge"><i></i><span>Open →</span></span>
+          <span class="badge"><i></i><span>story.html</span></span>
+        </div>
+      </div>
+      <div class="cta-button" aria-hidden="true"></div>
+    </a>
+
+    <a class="card" href="simulator.html" aria-label="Open main simulator">
+      <img src="https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1974&auto=format&fit=crop" alt="" />
+      <div class="content">
+        <h3 class="title">Core Impact Simulator</h3>
+        <p class="subtitle">Orbit, energy, crater & effects</p>
+        <div class="specs">
+          <div class="spec-row"><span class="spec-label">Inputs:</span><span class="spec-value">Diameter, velocity, density</span></div>
+          <div class="spec-row"><span class="spec-label">Models:</span><span class="spec-value">Energy (MT), crater, shaking</span></div>
+        </div>
+        <div class="badges">
+          <span class="badge"><i></i><span>Open →</span></span>
+          <span class="badge"><i></i><span>simulator.html</span></span>
+        </div>
+      </div>
+      <div class="cta-button" aria-hidden="true"></div>
+    </a>
+
+    <a class="card" href="tsunami-simulator.html" aria-label="Open tsunami simulator">
+      <img src="https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?q=80&w=2070&auto=format&fit=crop" alt="" />
+      <div class="content">
+        <h3 class="title">Tsunami Impact Simulator</h3>
+        <p class="subtitle">Hydrodynamics after ocean impact</p>
+        <div class="specs">
+          <div class="spec-row"><span class="spec-label">Layers:</span><span class="spec-value">USGS topography & coastlines</span></div>
+          <div class="spec-row"><span class="spec-label">Outputs:</span><span class="spec-value">Wave height & reach</span></div>
+        </div>
+        <div class="badges">
+          <span class="badge"><i></i><span>Open →</span></span>
+          <span class="badge"><i></i><span>tsunami-simulator.html</span></span>
+        </div>
+      </div>
+      <div class="cta-button" aria-hidden="true"></div>
+    </a>
+
+    <a class="card" href="asteroid-trail.html" aria-label="Open asteroid trail">
+      <img src="./t4.jpg" alt="" />
+      <div class="content">
+        <h3 class="title">Asteroid Trail</h3>
+        <p class="subtitle">Approach path & impact point</p>
+        <div class="specs">
+          <div class="spec-row"><span class="spec-label">Path:</span><span class="spec-value">Orbit & deflections</span></div>
+          <div class="spec-row"><span class="spec-label">Visuals:</span><span class="spec-value">Trails & waypoints</span></div>
+        </div>
+        <div class="badges">
+          <span class="badge"><i></i><span>Open →</span></span>
+          <span class="badge"><i></i><span>asteroid-trail.html</span></span>
+        </div>
+      </div>
+      <div class="cta-button" aria-hidden="true"></div>
+    </a>
+
+    <a class="card" href="asteroid-trail.html" aria-label="Open mitigation & defenses">
+      <img src="./t5.jpg" alt="" />
+      <div class="content">
+        <h3 class="title">Damage Mitigations & Defenses</h3>
+        <p class="subtitle">From deflection to preparedness</p>
+        <div class="specs">
+          <div class="spec-row"><span class="spec-label">Strategies:</span><span class="spec-value">Kinetic, gravity tractor, laser</span></div>
+          <div class="spec-row"><span class="spec-label">Goal:</span><span class="spec-value">Risk reduction & decision support</span></div>
+        </div>
+        <div class="badges">
+          <span class="badge"><i></i><span>Open →</span></span>
+          <span class="badge"><i></i><span>details</span></span>
+        </div>
+      </div>
+      <div class="cta-button" aria-hidden="true"></div>
+    </a>
+  </div>
+</main>
+
+<section class="features" aria-label="Project highlights">
+  <div class="container">
+    <div class="row">
+      <div class="col">
+        <div class="product-box">
+          <h3 class="text-center">About us</h3>
+          <p>Impacts is a web-based dashboard and simulator that blends NASA Near-Earth Object data with USGS environmental layers to explore asteroid impact scenarios. We prioritize credible physics, clear visuals, and accessibility for experts and the public alike.</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="product-box">
+          <h3 class="text-center">NASA Space Apps Challenge</h3>
+          <p>For the 2025 “Meteor Madness” challenge we build an interactive tool that integrates asteroid parameters (size, velocity, orbit) with USGS context to model consequences—craters, shaking, tsunamis—and to compare mitigation strategies such as kinetic impactors and gravity tractors.</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="product-box">
+          <h3 class="text-center">Our mission</h3>
+          <p>Make asteroid risk understandable and actionable for scientists, policymakers, and communities: simulate, visualize, and share scenarios that support preparedness and transparent decision-making.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======= FUNDO ESTELAR + METEOROS (animação aprimorada) ======= -->
+<script>
+(() => {
+  const canvas = document.getElementById('space-bg');
+  const ctx = canvas.getContext('2d');
+
+  // DPR + resize
+  let dpr = Math.max(1, window.devicePixelRatio || 1);
+  function resize(){
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width  = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+    canvas.style.width  = '100%';
+    canvas.style.height = '100%';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = innerWidth; H = innerHeight;
+    rebuildStars();
+  }
+  addEventListener('resize', resize, {passive:true});
+
+  // Paleta (usa --accent)
+  const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#24D3FF';
+
+  // Parallax de estrelas (3 camadas)
+  let W = innerWidth, H = innerHeight;
+  const layers = [
+    { speed:  6,  twinkle:[0.6,1.2], size:[0.6,1.2], alpha:[0.10,0.25], density:0.40 },
+    { speed: 12,  twinkle:[0.8,1.6], size:[0.8,1.6], alpha:[0.15,0.35], density:0.35 },
+    { speed: 22,  twinkle:[1.0,2.2], size:[1.0,2.0], alpha:[0.20,0.45], density:0.25 }
+  ];
+  let stars = [];
+
+  function rnd(a,b){ return a + Math.random()*(b-a); }
+  function rebuildStars(){
+    stars.length = 0;
+    const baseCount = Math.round(Math.min(220, Math.max(70, (W*H)/9000)));
+    for (const [i,lay] of layers.entries()){
+      const n = Math.round(baseCount * lay.density);
+      for (let k=0;k<n;k++){
+        stars.push({
+          x: Math.random()*W,
+          y: Math.random()*H,
+          s: rnd(lay.size[0], lay.size[1]),
+          a0: rnd(lay.alpha[0], lay.alpha[1]),
+          a: 1,
+          tw: rnd(lay.twinkle[0], lay.twinkle[1]),
+          ph: Math.random()*Math.PI*2,
+          layer: i
+        });
+      }
+    }
+  }
+
+  // ===== Meteoro avançado =====
+  const meteors = [];
+  const particles = [];
+  const maxMeteors = 5;
+  let lastSpawn = 0;
+  let spawnDelay = 2200;
+
+  function irregularRockPoints(seedR){
+    // polígono irregular (6–8 lados)
+    const n = Math.floor(rnd(6,9));
+    const pts = [];
+    for(let i=0;i<n;i++){
+      const ang = (i/n)*Math.PI*2;
+      const r = 1 + (Math.sin(ang*2.3 + seedR)*0.22) + rnd(-0.12,0.12);
+      pts.push({x:Math.cos(ang)*r, y:Math.sin(ang)*r});
+    }
+    return pts;
+  }
+
+  function spawnMeteor(){
+    if (meteors.length >= maxMeteors) return;
+
+    // nascimento em bordas com direção diagonal
+    const sides = ['left','top','right'];
+    const side = sides[Math.floor(Math.random()*sides.length)];
+
+    let x = -80, y = rnd(0, H*0.7);
+    let vx = rnd(180, 300), vy = rnd(120, 240); // px/s
+    if (side === 'top'){ x = rnd(0,W); y = -80; vx = rnd(-160, 160); vy = rnd(180, 320); }
+    if (side === 'right'){ x = W+80; y = rnd(0, H*0.7); vx = -rnd(180, 300); vy = rnd(120, 240); }
+
+    const size = rnd(2.2, 4.0);
+    const rock = irregularRockPoints(Math.random()*10);
+
+    meteors.push({
+      x, y, vx, vy,
+      windPhaseX: Math.random()*Math.PI*2,
+      windPhaseY: Math.random()*Math.PI*2,
+      windFreqX: rnd(0.6,1.4),
+      windFreqY: rnd(0.4,1.0),
+      windAmpX: rnd(10, 26),
+      windAmpY: rnd(4, 12),
+      grav: 12,                 // gravidade leve "pra baixo"
+      spin: rnd(-3, 3),         // rotação do rock (rad/s)
+      rot: Math.random()*Math.PI*2,
+      size,
+      trail: [],
+      life: rnd(1.8, 3.2),      // em segundos
+      age: 0,
+      fragmented: false,
+      shape: rock,
+      color: ACCENT
+    });
+  }
+
+  function drawRock(m){
+    // pequeno polígono girando, com face clara/escura
+    const angle = Math.atan2(m.vy, m.vx);
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(angle + m.rot);
+
+    const R = m.size*1.4;
+    ctx.beginPath();
+    for (let i=0;i<m.shape.length;i++){
+      const p = m.shape[i];
+      const px = p.x*R, py = p.y*R;
+      if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+
+    // face sombria
+    ctx.fillStyle = 'rgba(210,225,245,0.65)';
+    ctx.fill();
+
+    // “sombra” no lado de trás (radial leve)
+    const lg = ctx.createRadialGradient(0,0, R*0.15, 0,0, R*1.4);
+    lg.addColorStop(0,'rgba(255,255,255,0.65)');
+    lg.addColorStop(1,'rgba(0,0,0,0.0)');
+    ctx.fillStyle = lg; ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawComa(m){
+    // coma elíptica alinhada à direção (escala no eixo Y)
+    const speed = Math.hypot(m.vx, m.vy);
+    const rx = m.size*2.2 + speed*0.010;
+    const ry = m.size*1.0 + speed*0.004;
+
+    const ang = Math.atan2(m.vy, m.vx);
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(ang);
+    ctx.scale(1, ry/rx);
+
+    const g = ctx.createRadialGradient(0,0,0, 0,0, rx);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(180,230,255,0.70)');
+    g.addColorStop(1, 'rgba(36,211,255,0)');
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0,0, rx, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawTrail(m){
+    // duas passadas: glow (azul) + núcleo (branco)
+    const len = m.trail.length;
+    if (len < 2) return;
+
+    const baseW = m.size*2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Glow
+    for (let i=len-1; i>0; i--){
+      const a = i/len;
+      const p0 = m.trail[i], p1 = m.trail[i-1];
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = m.color;
+      ctx.globalAlpha = 0.22 * a;
+      ctx.lineWidth = baseW * a * 1.6;
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    }
+
+    // Núcleo claro
+    for (let i=len-1; i>0; i--){
+      const a = i/len;
+      const p0 = m.trail[i], p1 = m.trail[i-1];
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = 'rgba(255,255,255,1)';
+      ctx.globalAlpha = 0.28 * a;
+      ctx.lineWidth = baseW * a * 0.7;
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function emitSparks(m){
+    // faíscas se desprendendo no sentido oposto ao movimento
+    if (Math.random() < 0.28){
+      const ang = Math.atan2(m.vy, m.vx) + Math.PI + rnd(-0.6,0.6);
+      const spd = rnd(40, 120);
+      particles.push({
+        x: m.x, y: m.y,
+        vx: Math.cos(ang)*spd,
+        vy: Math.sin(ang)*spd - rnd(10,22), // leve “chama” para cima
+        life: 1,
+        size: rnd(0.6, 1.6)
+      });
+    }
+  }
+
+  function updateMeteor(m, dt){
+    m.age += dt;
+    // vento (curvatura sutil)
+    m.windPhaseX += m.windFreqX*dt;
+    m.windPhaseY += m.windFreqY*dt;
+    m.vx += Math.sin(m.windPhaseX) * m.windAmpX * dt;
+    m.vy += Math.cos(m.windPhaseY) * m.windAmpY * dt;
+
+    // gravidade leve
+    m.vy += m.grav * dt;
+
+    // integrador
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+
+    // trail
+    m.trail.unshift({x:m.x, y:m.y});
+    if (m.trail.length > 28) m.trail.pop();
+
+    // rotação da rocha
+    m.rot += m.spin * dt;
+
+    // solta faíscas
+    emitSparks(m);
+
+    // fragmentar raramente perto do fim
+    if (!m.fragmented && m.age > m.life*0.75 && Math.random() < 0.05 && meteors.length < maxMeteors){
+      m.fragmented = true;
+      const ang = Math.atan2(m.vy, m.vx);
+      for (let k=0;k<Math.floor(rnd(1,3));k++){
+        const a = ang + rnd(-0.3, 0.3);
+        meteors.push({
+          ...m,
+          vx: Math.cos(a)*Math.hypot(m.vx,m.vy)*rnd(0.7,0.9),
+          vy: Math.sin(a)*Math.hypot(m.vx,m.vy)*rnd(0.7,0.9),
+          size: m.size * rnd(0.6,0.85),
+          spin: m.spin * rnd(0.8,1.4),
+          life: (m.life-m.age)*rnd(0.6,0.9),
+          age: 0,
+          trail: [],
+          fragmented: true
+        });
+      }
+    }
+  }
+
+  function drawParticles(){
+    for (let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.x += p.vx * 0.016; p.y += p.vy * 0.016;
+      p.vy += 18 * 0.016; // gravidade nas faíscas
+      p.life -= 0.02;
+      if (p.life <= 0){ particles.splice(i,1); continue; }
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(180,230,255,${p.life*0.8})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function stepAndPaint(ts){
+    // spawn controlado por tempo
+    if (!document.hidden && (ts - lastSpawn >= spawnDelay)){
+      spawnMeteor(); lastSpawn = ts;
+      // variação de intervalo
+      spawnDelay = rnd(1800, 3000);
+    }
+
+    // fundo
+    ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
+    ctx.fillStyle = '#07080b'; ctx.fillRect(0,0,W,H);
+
+    // estrelas (parallax + twinkle)
+    ctx.globalCompositeOperation = 'screen';
+    for (const s of stars){
+      const lay = layers[s.layer];
+      s.y += lay.speed * 0.016;       // leve descida
+      s.x -= lay.speed * 0.004;       // drift lateral sutil
+      if (s.y > H+4){ s.y = -4; s.x = Math.random()*W; }
+      if (s.x < -4){ s.x = W + 4; }
+      s.a = s.a0 * (0.7 + 0.3 * Math.sin(s.ph += s.tw * 0.016));
+      ctx.globalAlpha = s.a;
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.s,0,Math.PI*2);
+      ctx.fillStyle = 'rgba(160,200,255,0.95)'; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // meteoro(s)
+    const dt = 0.016; // tempo alvo ~60fps (estável visualmente)
+    for (let i=meteors.length-1; i>=0; i--){
+      const m = meteors[i];
+      updateMeteor(m, dt);
+      drawTrail(m);      // rastro
+      drawComa(m);       // brilho elíptico
+      drawRock(m);       // “rocha” girando
+
+      // remove quando termina vida ou sai do quadro
+      if (m.age > m.life || m.x < -200 || m.x > W+200 || m.y > H+200){ meteors.splice(i,1); }
+    }
+
+    // faíscas
+    drawParticles();
+
+    // vinheta sutil
+    const v = ctx.createRadialGradient(W*.5,H*.5, Math.min(W,H)*.2, W*.5,H*.5, Math.max(W,H)*.8);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.18)');
+    ctx.globalCompositeOperation='source-over'; ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+
+    requestAnimationFrame(stepAndPaint);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastSpawn = performance.now();
+  });
+
+  resize(); lastSpawn = performance.now(); requestAnimationFrame(stepAndPaint);
+})();
+</script>
+</body>
+</html>
