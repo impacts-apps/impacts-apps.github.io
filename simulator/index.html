@@ -70,7 +70,9 @@
 	</head>
 
 	<body>
-		<div id="loading">Loading ...</div>
+        <div id="loading">Loading ...</div>
+        <!-- AUDIO: simulador -->
+        <audio id="simAudio" src="simulator.mp3" loop preload="auto" playsinline></audio>
 
 		<div id="info">
 			
@@ -820,5 +822,93 @@ window.TERRA = {
 console.log("%cTERRA ready.","padding:4px;background:#0af;color:#fff");
 </script>
 
+<script>
+// ------ Audio Setup (simulator.mp3) ---------------------------------
+(function(){
+  const audioEl = document.getElementById('simAudio');
+  if(!audioEl) return;
+
+  // Estado do controle exposto ao dat.GUI
+  const audioControl = {
+    enabled: true,
+    volume: 0.5
+  };
+
+  audioEl.volume = audioControl.volume;
+
+  let pendingUnmute = false;
+  let triedPlay = false;
+
+  function attemptPlay() {
+    if (triedPlay) return;
+    triedPlay = true;
+
+    // 1ª tentativa: tocar já desmutado
+    audioEl.muted = false;
+    audioEl.play().then(()=>{
+      // sucesso direto
+    }).catch(()=>{
+      // Falhou (provável bloqueio de autoplay). Tenta mutado.
+      audioEl.muted = true;
+      audioEl.play().then(()=>{
+        // Marcamos para desmutar após primeira interação do usuário
+        pendingUnmute = true;
+      }).catch(()=>{
+        // Mantém parado até interação
+        triedPlay = false; // permite nova tentativa ao interagir
+      });
+    });
+  }
+
+  attemptPlay();
+
+  function userInteractHandler() {
+    if (pendingUnmute) {
+      audioEl.muted = false;
+      pendingUnmute = false;
+    }
+    if (!audioEl.paused && audioEl.muted === false) {
+      // já ok
+    } else if(audioControl.enabled) {
+      attemptPlay();
+    }
+  }
+
+  ['click','keydown','pointerdown','touchstart'].forEach(ev=>{
+    window.addEventListener(ev, userInteractHandler, { once:false, passive:true });
+  });
+
+  // Funções para dat.GUI
+  function updateEnabled(val){
+    if(val){
+      attemptPlay();
+      audioEl.muted = false;
+      audioEl.play().catch(()=>{ /* silencioso */ });
+    } else {
+      audioEl.pause();
+    }
+  }
+
+  function updateVolume(v){
+    audioEl.volume = v;
+  }
+
+  // Integra com dat.GUI já criado em ImpactUI (tenta várias vezes até existir)
+  function attachToGUI(attempt=0){
+    const guiRef = window.gui || (window.ImpactUI && (ImpactUI.gui || ImpactUI.getGUI && ImpactUI.getGUI()));
+    if(!guiRef){
+      if (attempt < 20) setTimeout(()=>attachToGUI(attempt+1), 300);
+      return;
+    }
+    const folderName = 'Audio';
+    let audioFolder = (guiRef.__folders && guiRef.__folders[folderName]) ? guiRef.__folders[folderName] : guiRef.addFolder(folderName);
+
+    audioFolder.add(audioControl,'enabled').name('Som').onChange(updateEnabled);
+    audioFolder.add(audioControl,'volume',0,1,0.01).name('Volume').onChange(updateVolume);
+    audioFolder.open();
+  }
+  attachToGUI();
+})();
+</script>
 </body>
 </html>

@@ -367,7 +367,8 @@
       approach:{ lead_time_days:1095, rel_velocity_kms:15.0 },
       laser:{ power_MW:2.0, duty_cycle:.70 },
       tractor:{ ship_mass_ton:10, standoff_m:150 },
-      toggles:{ laser:false, tractor:false }
+      toggles:{ laser:false, tractor:false },
+      audio:{ enabled:true, volume:0.65 }
     };
     function asteroidMass(){ const r=(state.asteroid.diameter_km*1000)/2; return (4/3)*Math.PI*r*r*r*state.asteroid.density; }
     function estimateDeflectionKm(){
@@ -378,11 +379,29 @@
     }
     function estimateMassLossTon(){ return state.toggles.laser ? state.laser.power_MW*.35*state.laser.duty_cycle*state.approach.lead_time_days : 0; }
 
-    // ===== GUIs =====
-    const guiRight = new dat.GUI({ autoPlace:false, width:340 }); // Indicadores + Imagens + Gráficos
-    document.getElementById('pane').appendChild(guiRight.domElement);
+    // ===== Audio mitigation.mp3 (NOVO) =====
+    const audio = new Audio('mitigation.mp3'); // ajuste caminho se estiver noutra pasta
+    audio.loop = true;
+    audio.preload = 'auto';
+    audio.volume = state.audio.volume;
+    function tryPlayAudio(){
+      if(!state.audio.enabled) return;
+      audio.volume = state.audio.volume;
+      audio.play().catch(()=>{
+        // Autoplay bloqueado: esperar primeira interação
+        const resume = ()=>{
+          if(state.audio.enabled){
+            audio.play().catch(()=>{});
+          }
+        };
+        window.addEventListener('pointerdown', resume, { once:true });
+      });
+    }
 
-    const guiLeft  = new dat.GUI({ autoPlace:false, width:280 }); // Parâmetros
+    // ===== GUIs =====
+    const guiRight = new dat.GUI({ autoPlace:false, width:340 });
+    document.getElementById('pane').appendChild(guiRight.domElement);
+    const guiLeft  = new dat.GUI({ autoPlace:false, width:280 });
     document.getElementById('pane-left').appendChild(guiLeft.domElement);
 
     function rebuildAsteroid(){
@@ -447,6 +466,15 @@
     fOn.add(state.toggles,'laser').name('Laser ON').onChange(v=>{ laser.visible = glow.visible = v; updateDash(); });
     fOn.add(state.toggles,'tractor').name('Tractor ON').onChange(v=>{ ship.visible = tractorLine.visible = v; updateDash(); });
 
+    // ===== Folder Audio (NOVO) =====
+    const fAudio = guiLeft.addFolder('Audio');
+    fAudio.add(state.audio,'enabled').name('Tocar áudio').onChange(v=>{
+      if(v){ tryPlayAudio(); } else { audio.pause(); }
+    });
+    fAudio.add(state.audio,'volume',0,1,0.01).name('Volume').onChange(v=>{
+      audio.volume = v;
+    });
+
     const actions = {
       Resetar: ()=>{
         Object.assign(state.asteroid,{ diameter_km:.39, density:2250, albedo:.02, spin_rps:.060 });
@@ -454,6 +482,9 @@
         Object.assign(state.laser,{ power_MW:2.0, duty_cycle:.70 });
         Object.assign(state.tractor,{ ship_mass_ton:10, standoff_m:150 });
         state.toggles.laser=false; state.toggles.tractor=false;
+        state.audio.enabled = true;            // reset audio
+        audio.volume = state.audio.volume;
+        tryPlayAudio();
         laser.visible=glow.visible=ship.visible=tractorLine.visible=false;
         rebuildAsteroid(); updateDash();
         updateAllDisplays();
@@ -506,7 +537,7 @@
 
     // Garanta que nenhuma linha anterior está fechando os folders.
     // Abra todas as abas por padrão:
-    [fAst, fL, fT, fOn, fKPI, fIll, fDef, fAblF].forEach(f=>f.open());
+    [fAst, fL, fT, fOn, fAudio, fKPI, fIll, fDef, fAblF].forEach(f=>f.open());
 
     // ===== Gráficos =====
     const ctxDeflect = document.getElementById('chartDeflect');
@@ -586,8 +617,9 @@
 
     // Init
     rebuildAsteroid(); updateOrbitLimits();
-    targetDistance = camera.position.distanceTo(controls.target); // inicializa
+    targetDistance = camera.position.distanceTo(controls.target);
     buildCharts(); updateDash(); animate();
+    tryPlayAudio(); // garante chamada agora que a função existe
     let t=0; setInterval(()=>{ t+=.1; if(laser.visible){ glow.scale.setScalar(1+.25*Math.sin(t*2)); } if(ship.visible){ ship.position.y=0.2+0.05*Math.sin(t*1.8); } },60);
     updateMethodPositions();
   </script>
