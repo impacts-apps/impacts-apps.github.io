@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Impactor 2025 - Tsunami Simulation</title>
+    <meta charset="UTF-8"/>
+
+    <link href='http://fonts.googleapis.com/css?family=Fauna+One' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="css/style.css">
+
+    <!--load helper libraries-->
+    <script type="text/javascript" src="js/jquery/jquery-2.0.2.min.js"></script>
+    <script type="text/javascript" src="js/stackblur/StackBlur.js"></script>
+    <script type="text/javascript" src="js/skparallelreduce/skparallelreduce.min.js"></script>
+
+    <!--load 3D libraries-->
+    <script type="text/javascript" src="js/threejs/three.min.js"></script>
+    <script type="text/javascript" src="js/threejs/Detector.js"></script>
+    <script type="text/javascript" src="js/threejs/stats.min.js"></script>
+    <script type="text/javascript" src="js/threejs/OBJMTLLoader.js"></script>
+    <script type="text/javascript" src="js/threejs/MTLLoader.js"></script>
+    <script type="text/javascript" src="js/threejs/OrbitControls.js"></script>
+    <script type="text/javascript" src="js/dat.gui/dat.gui.min.js"></script>
+
+    <!--load terrain libraries-->
+    <script type="text/javascript" src="js/skulpt/skulpt.min.js"></script>
+
+    <!--load RBD libraries-->
+    <script type="text/javascript" src="js/physijs/physi.js"></script>
+
+    <!--load water libraries-->
+    <script type="text/javascript" src="../skunami.min.js"></script>
+
+    <!--load skarf (using its model loading functionalities only)-->
+    <script type="text/javascript" src="js/skarf/skarf.min.js"></script>
+
+    <script>
+
+    var SHADOW_MAP_RES = 1024;
+
+    var TERRAIN_RES = 256;
+    var TERRAIN_SIZE = 6;
+    var TERRAIN_GRID_SIZE = TERRAIN_SIZE / TERRAIN_RES;
+
+    var PROXY_TERRAIN_RES = 64;  //64 is the lowest possible in this example. Anything below cannot represent the terrain. Anything above will cause Physijs to go too slow.
+    var TERRAIN_FRICTION = 0.8;
+    var TERRAIN_RESTITUTION = 0.2;
+
+    var WATER_RES = TERRAIN_RES;
+    var WATER_SIZE = TERRAIN_SIZE;
+    var WATER_GRID_SIZE = WATER_SIZE / WATER_RES;
+    var WATER_DISTURB_AMOUNT = 0.04;
+    var WATER_DISTURB_RADIUS = 0.25;
+    var WATER_DENSITY = 1000;  //1000 kg per cubic metres, for dual coupling
+
+    var HIGHLIGHT_COLOR_ADD = new THREE.Color('#00ff00');
+    var HIGHLIGHT_COLOR_REMOVE = new THREE.Color('#ff0000');
+    var HIGHLIGHT_COLOR_NORMAL = new THREE.Color('#776655');
+
+    var terrainHalfSize = TERRAIN_SIZE / 2.0;
+    var waterHalfSize = WATER_SIZE / 2.0;
+
+    var gpuSkulpt;
+    var renderer, scene, camera;
+    var $canvasContainerElem, $threejsContainerElem, $threejsCanvasElem;
+    var renderStats, physijsStats;
+    var markerManager;
+    var isAddingObject = false;
+
+    var terrainImages = {
+        'Terra 1': 'images/terra1.png',
+        'Terra 2': 'images/terra2.png',
+        'Terra 3': 'images/terra3.png',
+        'IGMS A': 'images/igms_679104,4595950,680128,4596974_512.jpg',
+        'IGMS B': 'images/igms_693432,4598934,694456,4599958_512.jpg'
+    };
+    var terrainImageSettings = {
+        'images/terra1.png': { 'preblur': 2, 'height': 0.21, 'midGreyIsLowest': false },
+        'images/terra2.png': { 'preblur': 2, 'height': 0.4, 'midGreyIsLowest': false },
+        'images/terra3.png': { 'preblur': 2, 'height': 0.4, 'midGreyIsLowest': false },
+        'images/igms_679104,4595950,680128,4596974_512.jpg': { 'preblur': 3, 'height': 0.3, 'midGreyIsLowest': true },
+        'images/igms_693432,4598934,694456,4599958_512.jpg': { 'preblur': 2, 'height': 0.3, 'midGreyIsLowest': true }
+    };
+    var staticObjects = {
+        'Crate': 1001,
+        'Stone Wall': 1002
+    };
+    var dynObjects = {
+        'Crate': 1001
+    };
+
+    // ==== AJUSTES DE CONFIGURAÇÃO ====
+    // 1) Diminuir força do impacto
+    // 2) Aumentar levemente altura do terreno
+    // 3) Aumentar altura inicial da água (mais coluna d’água)
+    // (apenas substituir o bloco var options = { ... } pelo abaixo)
+
+    var options = {
+        terrainImage: terrainImages['Terra 1'],
+        terrainMidGreyIsLowest: false,
+        terrainPreBlur: 0,
+        terrainHeight: 0.32,        // antes 0.30 (um pouco mais de relevo)
+        sculptSize: 1.0,
+        sculptAmount: 0.08,
+        sculptClearSculpts: function () { gpuSkulpt.clear(); },
+        objectsStaticObject: staticObjects[Object.keys(staticObjects)[0]],
+        objectsAddStaticObject: objectsAddStaticObject,
+        objectsDynObject: dynObjects[Object.keys(dynObjects)[0]],
+        objectsAddDynObject: objectsAddDynObject,
+        objectsRemoveObject: objectsRemoveObject,
+        waterFloodVolRate: 0.0,
+        waterResetFloodRate: function () { options.waterFloodVolRate = 0.0; },
+        waterSourceRadius: 0.5,
+        waterSourceAmount: 0.08,
+        waterSinkRadius: 0.5,
+        waterSinkAmount: 0.2,
+        debugTerrainImage: false,
+        debugTerrainProxy: false,
+        debugSculptTexture: false,
+        debugObstaclesTexture: false,
+        debugWaterTexture: false,
+        meteorImpactStrength: 0.15,
+        meteorImpactRadius: 0.3,
+        meteorEffectsEnabled: true,
+        meteorSizeKm: 0.15 // dentro do novo limite 0–0.25 km
+    };
+
+    var clock = new THREE.Clock();
+    var HIDE_STATS = true; // <-- adicionar: true para ocultar os dois painéis
+
+    //config Physijs
+    Physijs.scripts.worker = 'js/physijs/physijs_worker.js';
+    Physijs.scripts.ammo = 'ammo.js';
+
+    function checkWebGl() {
+        if (!Detector.webgl) {
+            $('div').remove();
+            Detector.addGetWebGLMessage();
+            throw new Error('Your browser does not seem to support WebGL');
+        }
+    }
+
+    var controls;
+    var keyLight, fillLight;
+    var materials = [];
+    var groundPlaneMesh;
+    function setupMainScene() {
+
+        //create renderer
+        renderer = new THREE.WebGLRenderer({
+            antialias : true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight - 5);
+        renderer.setClearColor('#081419', 1);
+        renderer.shadowMapEnabled = true;
+        // (Opcional para realçar cores; se a versão do three suportar)
+        if (renderer.outputEncoding !== undefined) {
+            renderer.outputEncoding = THREE.sRGBEncoding;
+        }
+        renderer.shadowMapType = THREE.PCFShadowMap;
+        renderer.shadowMapSoft = true;
+        renderer.domElement.id = 'threejs-canvas';
+        $threejsContainerElem.append(renderer.domElement);
+
+        //create scene
+        scene = new Physijs.Scene({ fixedTimeStep: 1 / 60 });
+        scene.addEventListener(
+            'ready',
+            function () {
+                console.log('Physijs scene is ready');
+                //do things that can only be done after scene is ready, such as changing damping values
+            }
+        );
+        scene.addEventListener(  //https://github.com/chandlerprall/Physijs/issues/19
+            'update',
+            function () {
+                scene.simulate(undefined, 1);
+                physijsStats.update();
+            }
+        );
+        // scene.setGravity(new THREE.Vector3(0, -5, 0));
+
+        //create camera
+        camera = new THREE.PerspectiveCamera(25, renderer.domElement.width / renderer.domElement.height, 0.1, 1000);
+        // Ajuste inicial da câmera para enquadrar o mapa como na imagem fornecida
+        camera.position.set(0, 5.2, 8.6);   // (x,y,z) centralizado, mais alto e afastado
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        //create controls for camera
+        controls = new THREE.OrbitControls(camera);
+        controls.modifierKey = 'alt';
+        controls.target.set(0, 0, 0);       // garante foco no centro
+        controls.update();
+
+        //create plane for reference and for intersection test
+        var groundPlaneGeom = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 1, 1);  //much faster for intersection test when there are no divisions
+        groundPlaneGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        var groundPlaneMaterial = new THREE.MeshPhongMaterial({
+            color: 0x99ff66
+        });
+        materials.push(groundPlaneMaterial);
+        groundPlaneMesh = new THREE.Mesh(groundPlaneGeom, groundPlaneMaterial);
+        groundPlaneMesh.castShadow = true;
+        groundPlaneMesh.receiveShadow = true;
+        groundPlaneMesh.visible = false;
+        scene.add(groundPlaneMesh);
+
+        //setup lights
+        scene.add(new THREE.AmbientLight(0x111111));
+
+        var keyLight = new THREE.DirectionalLight(0xFFBBBB, 0.75);
+        keyLight.position.set(5, 15, -15);
+        keyLight.target.position.set(0, 0, 0);
+        keyLight.castShadow = true;
+        keyLight.shadowCameraNear = 18;
+        keyLight.shadowCameraFar = 25;
+        keyLight.shadowCameraRight = 4;
+        keyLight.shadowCameraLeft = -4;
+        keyLight.shadowCameraTop = 4;
+        keyLight.shadowCameraBottom = -4;
+        // keyLight.shadowCameraVisible = true;
+        keyLight.shadowBias = 0.005;
+        keyLight.shadowDarkness = 0.5;
+        keyLight.shadowMapWidth = SHADOW_MAP_RES;
+        keyLight.shadowMapHeight = SHADOW_MAP_RES;
+        scene.add(keyLight);
+
+        var fillLight = new THREE.DirectionalLight(0x33DDFF, 0.4);
+        fillLight.position.set(5, 2, 15);
+        fillLight.target.position.set(0, 0, 0);
+        scene.add(fillLight);
+
+        //create 4 walls to prevent dynamic object from flying off
+        var thickness = 1;
+        var halfThickness = thickness / 2.0;
+        var wallGeom = new THREE.CubeGeometry(WATER_SIZE, WATER_SIZE * 2, thickness);
+        var wallRotatedGeom = new THREE.CubeGeometry(WATER_SIZE, WATER_SIZE * 2, thickness);
+        wallRotatedGeom.applyMatrix(new THREE.Matrix4().makeRotationY(-Math.PI / 2));
+        var wallMaterial = new THREE.MeshPhongMaterial();
+        //+z wall
+        var wallMesh = new Physijs.BoxMesh(wallGeom, wallMaterial, 0);
+        wallMesh.position.z = waterHalfSize + halfThickness;
+        wallMesh.visible = false;
+        scene.add(wallMesh);
+        //-z wall
+        wallMesh = new Physijs.BoxMesh(wallGeom, wallMaterial, 0);
+        wallMesh.position.z = -(waterHalfSize + halfThickness);
+        wallMesh.visible = false;
+        scene.add(wallMesh);
+        //+x wall
+        wallMesh = new Physijs.BoxMesh(wallRotatedGeom, wallMaterial, 0);
+        wallMesh.position.x = waterHalfSize + halfThickness;
+        wallMesh.visible = false;
+        scene.add(wallMesh);
+        //-x wall
+        wallMesh = new Physijs.BoxMesh(wallRotatedGeom, wallMaterial, 0);
+        wallMesh.position.x = -(waterHalfSize + halfThickness);
+        wallMesh.visible = false;
+        scene.add(wallMesh);
+
+        //also create a marker manager to load in markers
+        markerManager = new SKARF.MarkerManager('models/models_main.json');
+
+        // Adicionar event listener com passive: false para permitir preventDefault
+        setTimeout(function() {
+            var canvas = renderer.domElement;
+            canvas.addEventListener('click', function(event) {
+                console.log("Click detected!"); // Debug
+                detectIntersection(event);
+            }, { passive: false });
+            
+            console.log("Event listener added successfully"); // Debug
+        }, 1000);
+    }
+
+    var proxyTerrainGeom, proxyTerrainMaterial, proxyTerrainMesh;
+    function createPhysijsHeightfieldMesh() {
+        proxyTerrainMesh = new Physijs.HeightfieldMesh(proxyTerrainGeom, proxyTerrainMaterial, 0);
+        proxyTerrainMesh.rotation.x = -Math.PI / 2;
+        proxyTerrainMesh.castShadow = true;
+        proxyTerrainMesh.receiveShadow = true;
+        proxyTerrainMesh.visible = options.debugTerrainProxy;
+        scene.add(proxyTerrainMesh);
+    }
+
+    function updateProxyTerrain(pixelData) {
+        var v = proxyTerrainGeom.vertices;
+        var i, len;
+        for (i = 0, len = v.length; i < len; i++) {
+            v[i].z = pixelData[i];
+        }
+        proxyTerrainGeom.verticesNeedUpdate = true;
+        // proxyTerrainGeom.computeFaceNormals();
+        // proxyTerrainGeom.computeVertexNormals();
+        // proxyTerrainGeom.normalsNeedUpdate = true;
+    }
+
+    function matchProxyToActualTerrain() {
+        //get pixel float data from gpu skulpt and update the proxy geometry
+        var pixelFloatData = gpuSkulpt.getProxyPixelFloatData();
+        updateProxyTerrain(pixelFloatData);
+
+        //update Physijs heightfield mesh
+        //NOTE: have to recreate a new Physijs.HeightfieldMesh every time we change the vertex positions
+        scene.remove(proxyTerrainMesh);  //TODO: check if there is a need to delete the mesh to free the memory
+        createPhysijsHeightfieldMesh();
+    }
+
+    var terrainGeom, terrainMaterial, terrainMesh, skulptTerrainMesh;
+    var terrainVisGeom, terrainVisMaterial, terrainVisMesh;
+    // ================== NOVO: MATERIAL / COLORIZAÇÃO DO TERRENO ==================
+    var terrainMaterial;
+    function applyTerrainColoring() {
+        if (!terrainGeom || !gpuSkulpt) return;
+        var heights = gpuSkulpt.getPixelFloatData(); // array float (res*res)
+        if (!heights) return;
+
+        var verts = terrainGeom.vertices;
+        if (!terrainGeom.colors || terrainGeom.colors.length !== verts.length)
+            terrainGeom.colors = new Array(verts.length);
+
+        // Encontrar min/max para normalização dinâmica
+        var minH =  9999, maxH = -9999;
+        for (var i = 0; i < heights.length; i++) {
+            var h = heights[i];
+            if (h < minH) minH = h;
+            if (h > maxH) maxH = h;
+        }
+        var span = Math.max(0.00001, maxH - minH);
+
+        // Função gradiente (tons mais escuros)
+        function heightToColor(hNorm) {
+            // hNorm 0..1
+            var c = new THREE.Color();
+            if (hNorm < 0.15) {             // profundo
+                c.setRGB(0.05, 0.12, 0.15);
+            } else if (hNorm < 0.30) {      // raso
+                c.setRGB(0.10, 0.20, 0.18);
+            } else if (hNorm < 0.55) {      // médio
+                c.setRGB(0.18, 0.30, 0.12);
+            } else if (hNorm < 0.75) {      // alto
+                c.setRGB(0.28, 0.32, 0.18);
+            } else if (hNorm < 0.90) {      // mais alto
+                c.setRGB(0.35, 0.30, 0.22);
+            } else {                        // topo
+                c.setRGB(0.55, 0.55, 0.55);
+            }
+            return c;
+        }
+
+        for (var v = 0; v < verts.length; v++) {
+            var hSample = heights[v];
+            var n = (hSample - minH) / span;
+            terrainGeom.colors[v] = heightToColor(n);
+        }
+        terrainGeom.colorsNeedUpdate = true;
+    }
+
+    function setupSkulpt() {
+
+        //create a terrain mesh for sculpting
+        terrainGeom = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_RES - 1, TERRAIN_RES - 1);
+        terrainGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        terrainMesh = new THREE.Mesh(terrainGeom, null);
+        terrainMesh.castShadow = true;
+        terrainMesh.receiveShadow = true;
+        // terrainMesh.visible = false;
+        scene.add(terrainMesh);
+
+        //create a GpuSkulpt
+        gpuSkulpt = new SKULPT.GpuSkulpt({
+            renderer: renderer,
+            mesh: terrainMesh,
+            size: TERRAIN_SIZE,
+            res: TERRAIN_RES,
+            proxyRes: PROXY_TERRAIN_RES
+        });
+
+        //create a RTT visualization plane
+        terrainVisGeom = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 1, 1);
+        terrainVisGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        terrainVisMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, map: gpuSkulpt.getSculptDisplayTexture() });
+        materials.push(terrainVisMaterial);
+        terrainVisMesh = new THREE.Mesh(terrainVisGeom, terrainVisMaterial);
+        terrainVisMesh.position.y = 2;
+        scene.add(terrainVisMesh);
+
+        // também ocultar plano de visualização
+        terrainVisMesh.visible = false;  // ocultar plano de visualização
+
+        //also create a proxy mesh for Physijs collision
+        proxyTerrainGeom = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, PROXY_TERRAIN_RES - 1, PROXY_TERRAIN_RES - 1);
+        proxyTerrainMaterial = Physijs.createMaterial(
+            new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                wireframe: false
+            }),
+            TERRAIN_FRICTION,
+            TERRAIN_RESTITUTION
+        );
+        materials.push(proxyTerrainMaterial);
+        createPhysijsHeightfieldMesh();
+
+        //finally, create a callback that updates the proxy geometry automatically when GPU skulpt updates texture
+        gpuSkulpt.addCallback('update', function () {
+            matchProxyToActualTerrain();
+            applyTerrainColoring();
+        });
+    }
+
+    var $imageCanvasElem, imageCanvasElemContext;
+    var terrainImageData, terrainImageProcessedData;
+    function filterTerrainImageAndGenerateHeight() {
+        //draw image onto canvas
+        //NO NEED TO DO THIS WHEN USING stackBlurImage()
+        //imageCanvasElemContext.drawImage($scaledImageObj, 0, 0, terrainImageWidth, terrainImageHeight);
+
+        //do pre-blur filtering first
+        stackBlurImage('scaledTerrainImage', 'terrainImageCanvas', options.terrainPreBlur, false);
+
+        //get filtered image data
+        terrainImageData = imageCanvasElemContext.getImageData(0, 0, TERRAIN_RES, TERRAIN_RES).data;
+
+        //update skulpt
+        gpuSkulpt.loadFromImageData(terrainImageData, options.terrainHeight, options.terrainMidGreyIsLowest);
+    }
+
+    var $scaledImageObj, $origImageObj;
+    function prepareTerrainImageElements() {
+
+        //create canvas that is same size as terrain res so that one vertex maps to one resized pixel
+        $imageCanvasElem = $(document.createElement('canvas'));
+        $imageCanvasElem[0].id = 'terrainImageCanvas';
+        $imageCanvasElem[0].width = TERRAIN_RES;
+        $imageCanvasElem[0].height = TERRAIN_RES;
+        $imageCanvasElem.css({'position': 'fixed', 'top': '100px', 'left': '0px', 'display': 'none'});
+        $('body').append($imageCanvasElem);
+
+        //get canvas context
+        imageCanvasElemContext = $imageCanvasElem[0].getContext('2d');
+
+        //load terrain image
+        $scaledImageObj = $(new Image());
+        $scaledImageObj[0].id = 'scaledTerrainImage';
+        $scaledImageObj[0].onload = function () {
+            //this function is triggered from $origImageObj setting this src
+
+            //start filtering and changing heights
+            filterTerrainImageAndGenerateHeight();
+        };
+        $scaledImageObj.css({'display': 'none'});
+        $('body').append($scaledImageObj);
+
+        //load original terrain image, scale it using canvas, then set scaled image to $scaledImageObj
+        $origImageObj = $(new Image());
+        $origImageObj[0].onload = function () {
+            //copy to scaled canvas to scale this image
+            imageCanvasElemContext.drawImage($origImageObj[0], 0, 0, TERRAIN_RES, TERRAIN_RES);
+
+            //get scaled data from canvas and set data for scaledImageObj
+            $scaledImageObj[0].src = $imageCanvasElem[0].toDataURL();
+        };
+    }
+
+    function loadTerrainImage(image) {
+        console.log('Loading terrain image: ' + image);
+        $origImageObj[0].src = image;
+    }
+
+    var waterMesh;
+    var gpuWater;
+    var waterVisGeom, waterVisMaterial, waterVisMesh;
+    var obstaclesVisGeom, obstaclesVisMaterial, obstaclesVisMesh;
+    var staticObstacleMeshes = [];
+    var dynObstacleMeshes = [];
+    // ================== AJUSTE VISUAL DA ÁGUA (MATERIAL TRANSPARENTE) ==================
+    var waterSurfaceMaterial;
+    function setupWater() {
+
+        //create a plane for height field water sim
+        var waterGeom = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, WATER_RES - 1, WATER_RES - 1);
+        waterGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        waterMesh = new THREE.Mesh(waterGeom, null);
+        waterMesh.castShadow = true;
+        waterMesh.receiveShadow = true;
+        // waterMesh.visible = false;
+        scene.add(waterMesh);
+
+        // Material visual da água (transparente)
+        waterSurfaceMaterial = new THREE.MeshPhongMaterial({
+            color: 0x0d3a4d,      // azul petróleo escuro
+            emissive: 0x03151c,
+            specular: 0x3e7f9f,
+            shininess: 85,
+            transparent: true,
+            opacity: 0.55
+        });
+        waterMesh.material = waterSurfaceMaterial;
+
+        gpuWater = new SKUNAMI.GpuPipeModelWater({
+            renderer: renderer,
+            scene: scene,
+            mesh: waterMesh,
+            size: WATER_SIZE,
+            res: WATER_RES,
+            dampingFactor: 0.9995,
+            initialWaterHeight: 0.043, // levemente mais água
+            terrainTexture: gpuSkulpt.getSculptDisplayTexture(),
+            density: WATER_DENSITY
+        });
+
+        // Substituir: antes chamava gpuWater.disturb direto (que desloca massa líquida local)
+        // Agora garantimos volume zero: pulso positivo central + anel negativo balanceado
+        window.disturbNoVolume = function(pos, amplitude, radius){
+            // Segurança
+            if (!gpuWater || !pos) return;
+            amplitude = (amplitude || 0.05) * 0.85; // redução global
+            radius = radius || 0.4;
+
+            // Definições
+            var innerR = radius * 0.55;      // núcleo
+            var outerR = radius;             // anel compensatório
+
+            // Área ~ r^2 (ignorando pi, cancela)
+            var innerArea = innerR * innerR;
+            var outerArea = outerR * outerR - innerArea;
+
+            // Para volume zero: A_pos * innerArea + A_neg * outerArea = 0
+            // A_neg = -(A_pos * innerArea) / outerArea
+            var aPos = amplitude;
+            var aNeg = -(aPos * innerArea) / outerArea;
+
+            // Pulso central
+            gpuWater.disturb(pos, aPos, innerR);
+            // Anel compensatório (negativo)
+            gpuWater.disturb(pos, aNeg, outerR);
+        };
+
+        //create a RTT visualization plane for the water
+        waterVisGeom = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 1, 1);
+        waterVisGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        waterVisMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, map: gpuWater.getWaterDisplayTexture() });
+        materials.push(waterVisMaterial);
+        waterVisMesh = new THREE.Mesh(waterVisGeom, waterVisMaterial);
+        waterVisMesh.position.y = 2;
+        scene.add(waterVisMesh);
+
+        //create a RTT visualization plane for obstacles
+        obstaclesVisGeom = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 1, 1);
+        obstaclesVisGeom.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        obstaclesVisMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, map: gpuWater.getObstaclesDisplayTexture() });
+        materials.push(obstaclesVisMaterial);
+        obstaclesVisMesh = new THREE.Mesh(obstaclesVisGeom, obstaclesVisMaterial);
+        obstaclesVisMesh.position.y = 2;
+        scene.add(obstaclesVisMesh);
+
+        // ocultar visualização da água (RTT)
+        waterVisMesh.visible = false;        // ocultar visualização da água (RTT)
+        obstaclesVisMesh.visible = false;    // ocultar visualização de obstáculos
+
+        //create a callback that exerts forces on dynamic meshes for dual coupling
+        gpuWater.addCallback('exertForce', function (object, force) {
+            //apply force on Physijs object
+            object.applyCentralForce(force);
+        });
+    }
+
+    var worldPos = new THREE.Vector3();
+    var camPos = new THREE.Vector3();
+    var projector = new THREE.Projector();
+    var raycaster = new THREE.Raycaster();
+    var intersectPoint = new THREE.Vector3();
+    var mousePosNorm = new THREE.Vector2();
+    function detectIntersection(event) {
+
+        // Apenas detectar ponto para ondas (removido add/remove/sculpt)
+        var canvas = renderer.domElement;
+        var canvasRect = canvas.getBoundingClientRect();
+
+        mousePosNorm.x = ((event.clientX - canvasRect.left) / canvasRect.width) * 2 - 1;
+        mousePosNorm.y = -((event.clientY - canvasRect.top) / canvasRect.height) * 2 + 1;
+
+        var vector = new THREE.Vector3(mousePosNorm.x, mousePosNorm.y, 1);
+        if (!window.projector) window.projector = new THREE.Projector();
+        projector.unprojectVector(vector, camera);
+        var direction = vector.sub(camera.position).normalize();
+        var ray = new THREE.Raycaster(camera.position, direction);
+
+        var objectsToTest = [];
+        if (waterMesh) objectsToTest.push(waterMesh);
+        if (terrainMesh) objectsToTest.push(terrainMesh);
+        if (groundPlaneMesh) objectsToTest.push(groundPlaneMesh);
+
+        var intersects = ray.intersectObjects(objectsToTest);
+        if (intersects.length > 0) {
+            intersectPoint.copy(intersects[0].point);
+            return true;
+        }
+        return false;
+    }
+
+    // Remover as constantes de impacto - vamos usar uma abordagem diferente
+    // var METEOR_IMPACT_STRENGTH = 0.005;
+    // var METEOR_IMPACT_RADIUS = 0.08;
+    
+    function createMeteorImpact(position) {
+        if (!gpuWater) return;
+        var baseA = options.meteorImpactStrength * 0.75; // redução
+        // Pulso 1
+        disturbNoVolume(position, baseA, options.meteorImpactRadius);
+        setTimeout(function(){ disturbNoVolume(position, -baseA, options.meteorImpactRadius); }, 0000);
+        // Pulso 2
+        setTimeout(function(){
+            disturbNoVolume(position, baseA * 0.55, options.meteorImpactRadius * 1.35);
+            setTimeout(function(){ disturbNoVolume(position, -(baseA * 0.55), options.meteorImpactRadius * 1.35); }, 0000);
+        }, 110);
+        // Pulso 3
+        setTimeout(function(){
+            disturbNoVolume(position, baseA * 0.30, options.meteorImpactRadius * 1.8);
+            setTimeout(function(){ disturbNoVolume(position, -(baseA * 0.30), options.meteorImpactRadius * 1.8); }, 0000);
+        }, 220);
+    }
+
+    // Função para criar ondas direcionais (como tsunami) - UMA ÚNICA ONDA SEM ÁGUA
+    function createDirectionalWave(startPosition, direction, strength, width) {
+        if (!gpuWater) return;
+        var a = strength * 0.35; // antes 0.5
+        disturbNoVolume(startPosition, a, options.meteorImpactRadius);
+        setTimeout(function(){ disturbNoVolume(startPosition, -a, options.meteorImpactRadius); }, 3000);
+    }
+
+    // Função para criar ondas radiais mais intensas - SEM ADICIONAR ÁGUA
+    function createRadialWave(centerPosition, maxRadius, strength) {
+        if (!gpuWater) return;
+        var numRings = 6;
+        var ringDelay = 120;
+        for (var ring = 0; ring < numRings; ring++) {
+            setTimeout(function(ringIndex){
+                var radius = (ringIndex + 1) * (maxRadius / numRings);
+                var numPoints = Math.max(8, Math.floor(radius * 14));
+                for (var i = 0; i < numPoints; i++) {
+                    var angle = (i / numPoints) * Math.PI * 2;
+                    var wavePosition = new THREE.Vector3(
+                        centerPosition.x + Math.cos(angle) * radius,
+                        centerPosition.y,
+                        centerPosition.z + Math.sin(angle) * radius
+                    );
+                    if (Math.abs(wavePosition.x) < waterHalfSize && Math.abs(wavePosition.z) < waterHalfSize) {
+                        var currentAmp = strength * (1 - ringIndex / numRings) * 0.6;
+                        disturbNoVolume(wavePosition, currentAmp, options.meteorImpactRadius * 0.5);
+                    }
+                }
+            }.bind(null, ring), ring * ringDelay);
+        }
+    }
+
+    function detectIntersectionAndShowSculptCursor(event) {
+
+        //detect intersection and show cursor
+        intersectPoint = detectIntersection(event);
+        if (intersectPoint) {
+            //show cursor at intersection point
+            gpuSkulpt.updateCursor(intersectPoint);
+            gpuSkulpt.showCursor();
+        } else {
+            //cursor is out of terrain, so hide it, otherwise it will remain at the edge
+            gpuSkulpt.hideCursor();
+        }
+    }
+
+    function sculptTerrain(type, position, amount) {
+        gpuSkulpt.sculpt(type, position, amount);
+    }
+
+    function highlightMesh(mesh, color) {
+        var material = mesh.material;
+        if (material instanceof THREE.MeshFaceMaterial) {
+            var i, len;
+            for (i = 0, len = material.materials.length; i < len; i++) {
+                material.materials[i].emissive.copy(color);
+            }
+        } else {
+            material.emissive.copy(color);
+        }
+    }
+
+    function getPixelIndex(position) {
+        var row = Math.floor((-position.z + terrainHalfSize) / TERRAIN_SIZE * TERRAIN_RES);
+        var col = Math.floor((position.x + terrainHalfSize) / TERRAIN_SIZE * TERRAIN_RES);
+        return (row * TERRAIN_RES) + col;
+    }
+
+    function createPhysijsMeshFromThreejsMesh(mesh, position, rotation, params) {
+
+        var mass = typeof params.mass === 'undefined' ? 10 : params.mass;
+        var friction = typeof params.friction === 'undefined' ? 0.8 : params.friction;
+        var restitution = typeof params.restitution === 'undefined' ? 0.2 : params.restitution;
+        var linearDamping = typeof params.linearDamping === 'undefined' ? 0.9 : params.linearDamping;
+        var angularDamping = typeof params.angularDamping === 'undefined' ? 0.5 : params.angularDamping;
+
+        //get geometry
+        var geometry = mesh.geometry;
+
+        //create Physijs material out of the existing material
+        var material = Physijs.createMaterial(
+            mesh.material,
+            friction,
+            restitution
+        );
+        materials.push(mesh.material);
+
+        //create the Physijs mesh (assume everything is using ConvexMesh)
+        var physijsMesh = new Physijs.ConvexMesh(geometry, material, mass);
+        physijsMesh.position.copy(position);
+        physijsMesh.rotation.copy(rotation);
+        physijsMesh.castShadow = true;
+        physijsMesh.receiveShadow = true;
+        // physijsMesh.visible = false;
+        scene.add(physijsMesh);
+        physijsMesh.setDamping(linearDamping, angularDamping);  //can only call this after adding to scene
+
+        return physijsMesh;
+    }
+
+    var userAddedMeshes = [];
+    var currTransform = null;
+    var transformAddedToScene = false;
+    var indicatorMesh;
+    var objectToAddMarkerId;
+    function objectsAddObject() {
+
+        //return if already adding object
+        if (isAddingObject) {
+            return;
+        }
+
+        if (!indicatorMesh) {
+            var indicatorGeom = new THREE.SphereGeometry(0.05);
+            var indicatorMaterial = new THREE.MeshLambertMaterial({color: '#00ff00'});
+            indicatorMesh = new THREE.Mesh(indicatorGeom, indicatorMaterial);
+            indicatorMesh.visible = false;
+            scene.add(indicatorMesh);
+        }
+
+        //create an Object3D in the scene first
+        currTransform = new THREE.Object3D();
+        transformAddedToScene = false;
+
+        //load the object to the transform
+        markerManager.loadForMarker(objectToAddMarkerId, currTransform, 1, options.displayWireframe);
+
+        //turn on flag for object to follow mouse detected intersection point
+        isAddingObject = true;
+    }
+
+    var objectToAddIsDynamic;
+    function objectsAddStaticObject() {
+        objectToAddIsDynamic = false;
+        objectToAddMarkerId = options.objectsStaticObject;
+        objectsAddObject();
+    }
+
+    function objectsAddDynObject() {
+        objectToAddIsDynamic = true;
+        objectToAddMarkerId = options.objectsDynObject;
+        objectsAddObject();
+    }
+
+    function objectsAddObjectCancel() {
+
+        //return if not adding object
+        if (!isAddingObject) {
+            return;
+        }
+
+        //turn off flag
+        isAddingObject = false;
+
+        //hide indicator
+        indicatorMesh.visible = false;
+
+        //remove object from scene
+        try {
+            scene.remove(currTransform);
+        } catch (err) {
+            //just let one of the Physijs error pass silently (happens because I'm removing a THREE.Object3D from a Physijs scene)
+        }
+    }
+
+    function objectsAddObjectProject(transform, position) {
+
+        //return if not adding object
+        if (!isAddingObject) {
+            return;
+        }
+
+        transform.position.copy(position);
+
+        //highlight the object
+        if (transform.children[0] && !transformAddedToScene) {
+
+            //add transform to scene (now that the object has finished loading)
+            scene.add(currTransform);
+
+            //also highlight the object
+            highlightMesh(transform.children[0], HIGHLIGHT_COLOR_ADD);
+
+            transformAddedToScene = true;
+        }
+
+        //read in terrain height
+        //TODO: read this in once until terrain has been sculpted
+        var terrainPixelFloatData = gpuSkulpt.getPixelFloatData();
+        var index = getPixelIndex(position);
+
+        //shift up in Y
+        var height = terrainPixelFloatData[index];
+        if (objectToAddIsDynamic) {
+
+            //for dynamic objects, take into account water level too
+            var waterPixelFloatData = gpuWater.getPixelFloatData();
+            height += waterPixelFloatData[index];
+
+            //move the indicator
+            indicatorMesh.position.set(position.x, height, position.z);
+            indicatorMesh.visible = true;
+
+            //add offset so that we can release the object above water for some ripples
+            height += 0.5;
+        } else {
+            //hide the indicator
+            indicatorMesh.visible = false;
+        }
+        transform.position.y = height;
+    }
+
+    function objectsAddObjectRotate(currTransform, rotation) {
+
+        //return if not adding object
+        if (!isAddingObject) {
+            return;
+        }
+
+        currTransform.rotation.y = THREE.Math.degToRad(rotation);
+    }
+
+    function objectsAddObjectConfirm(transform) {
+
+        //return if not adding object
+        if (!isAddingObject) {
+            return;
+        }
+
+        isAddingObject = false;
+
+        //hide indicator mesh
+        indicatorMesh.visible = false;
+
+        //remove from Object3D
+        var origMesh = transform.children[0];
+        transform.remove(origMesh);
+
+        //remove highlight on the object
+        highlightMesh(origMesh, HIGHLIGHT_COLOR_NORMAL);
+
+        //get JSON data
+        var dataFromJson = origMesh.geometry.__jsonData;
+
+        //for static objects, set mass to 0
+        var mass = objectToAddIsDynamic ? dataFromJson.mass : 0;
+
+        //convert into Physijs mesh
+        var physijsMesh = createPhysijsMeshFromThreejsMesh(origMesh, transform.position, transform.rotation, {
+            mass: mass,
+            friction: dataFromJson.friction,
+            restitution: dataFromJson.restitution,
+            linearDamping: dataFromJson.linearDamping,
+            angularDamping: dataFromJson.angularDamping
+        });
+        userAddedMeshes.push(physijsMesh);
+
+        //register dynamic objects with gpu water, and store in array for easy retrieval later
+        if (objectToAddIsDynamic) {
+            gpuWater.addDynamicObstacle(physijsMesh, mass);
+            dynObstacleMeshes.push(physijsMesh);
+        } else {
+            gpuWater.addStaticObstacle(physijsMesh);
+            staticObstacleMeshes.push(physijsMesh);
+        }
+
+        //TODO: delete origMesh
+    }
+
+    var isRemovingObject = false;
+    function objectsRemoveObject() {
+
+        //return if already removing object
+        if (isRemovingObject) {
+            return;
+        }
+
+        //turn on flag for selection with mouse
+        isRemovingObject = true;
+    }
+
+    function objectsRemoveObjectCancel() {
+
+        //return if not removing object
+        if (!isRemovingObject) {
+            return;
+        }
+
+        //turn off flag
+        isRemovingObject = false;
+    }
+
+    var userAddedMeshToRemove = null;
+    function objectsRemoveObjectFind(position) {
+
+        //return if not removing object
+        if (!isRemovingObject) {
+            return;
+        }
+
+        userAddedMeshToRemove = null;
+
+        //search through all objects
+        var i, len, transform, mesh;
+        for (i = 0, len = userAddedMeshes.length; i < len; i++) {
+            mesh = userAddedMeshes[i];
+            var transformedBBox = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+            if (!userAddedMeshToRemove && position.x >= transformedBBox.min.x && position.x <= transformedBBox.max.x && position.z >= transformedBBox.min.z && position.z <= transformedBBox.max.z) {
+                //highlight the object
+                highlightMesh(mesh, HIGHLIGHT_COLOR_REMOVE);
+
+                //store object to remove
+                userAddedMeshToRemove = mesh;
+            } else {
+                //remove highlight on the object
+                highlightMesh(mesh, HIGHLIGHT_COLOR_NORMAL);
+            }
+        }
+    }
+
+    function objectsRemoveObjectConfirm() {
+
+        //return if not removing object
+        if (!isRemovingObject) {
+            return;
+        }
+
+        if (userAddedMeshToRemove) {
+
+            //remove object transform
+            //TODO: check if there is a need to delete the mesh to free the memory
+            scene.remove(userAddedMeshToRemove);
+
+            //remove from array
+            var i, len;
+            for (i = 0, len = userAddedMeshes.length; i < len; i++) {
+                if (userAddedMeshes[i] === userAddedMeshToRemove) {
+                    userAddedMeshes.splice(i, 1);
+                }
+            }
+
+            //remove from GPU water
+            gpuWater.removeObstacle(userAddedMeshToRemove);
+        }
+
+        //turn off flag
+        isRemovingObject = false;
+    }
+
+    function window_onResize(event) {
+        //update camera projection
+        camera.aspect = window.innerWidth / (window.innerHeight - 5);
+        camera.updateProjectionMatrix();
+
+        //update renderer size
+        renderer.setSize(window.innerWidth, window.innerHeight - 5);
+    }
+
+    var activateDisturb = false;
+    var activateAddRotate = false;
+    var firstActivateAddRotate = false;
+    function window_onKeyDown(event) {
+
+        //for water
+        if (event.keyCode === 32) {  //space
+            activateDisturb = true;
+        }
+
+        //for dynamic obstacle motion
+        else if (event.keyCode === 87) {  //w
+            dynObstacleMeshes[0].applyCentralForce(new THREE.Vector3(0, 0, -1100));
+        } else if (event.keyCode === 83) {  //s
+            dynObstacleMeshes[0].applyCentralForce(new THREE.Vector3(0, 0, 1100));
+        } else if (event.keyCode === 65) {  //a
+            dynObstacleMeshes[0].applyCentralForce(new THREE.Vector3(-1100, 0, 0));
+        } else if (event.keyCode === 68) {  //d
+            dynObstacleMeshes[0].applyCentralForce(new THREE.Vector3(1100, 0, 0));
+        }
+
+        //for rotation when adding objects into scene
+        else if (event.keyCode === 82) {  //r
+            if (firstActivateAddRotate) {
+                firstActivateAddRotate = false;
+            }
+            if (!activateAddRotate) {
+                firstActivateAddRotate = true;
+            }
+            activateAddRotate = true;
+        }
+
+        //for cancelling operations
+        else if (event.keyCode === 27) {  //esc
+            if (isAddingObject) {
+                objectsAddObjectCancel();
+            }
+        }
+    }
+
+    function window_onKeyUp(event) {
+
+        //for sculpting
+        if (event.keyCode === 16 || event.keyCode === 17) {  //shift or ctrl
+            //hide cursor when shift or ctrl key is up
+            gpuSkulpt.hideCursor();
+        }
+
+        //for water
+        else if (event.keyCode === 32) {  //space
+            activateDisturb = false;
+        }
+
+        //for rotation when adding objects into scene
+        if (event.keyCode === 82) {  //r
+            firstActivateAddRotate = false;
+            activateAddRotate = false;
+        }
+    }
+
+    var isSculpting = false;
+    var sculptUvPos = new THREE.Vector2();
+    var isDisturbing = false;
+    var mouseDownButton = -1;  //firefox hack (unable to detect RMB during mousemove event)
+    function window_onMouseDown(event) {
+
+        // ALT = só câmera (OrbitControls)
+        if (event.altKey) return;
+
+        // Só impacto (LMB) e onda direcional (Shift+LMB)
+        if (event.button === 0) {
+            if (detectIntersection(event)) {
+                if (event.shiftKey) {
+                    var dir = new THREE.Vector3(1,0,0);
+                    createDirectionalWave(intersectPoint, dir, options.meteorImpactStrength, 1.0);
+                } else {
+                    createMeteorImpact(intersectPoint);
+                }
+            }
+        }
+    }
+
+    function window_onMouseMove(event) {
+        // Nada além de câmera (Orbit via ALT) – não precisamos mais do resto
+    }
+
+    function window_onMouseUp(event) {
+        // Sem operações persistentes agora
+    }
+
+    function window_onKeyDown(event) {
+        // Nenhuma interação (removido: espaço, ctrl, w/a/s/d, r)
+    }
+    function window_onKeyUp(event) {}
+
+    function setupEvents() {
+        window.addEventListener('resize', window_onResize, false);
+        window_onResize();
+        $threejsCanvasElem = $('#threejs-canvas');
+        $threejsCanvasElem[0].addEventListener('mousedown', window_onMouseDown, false);
+        $threejsCanvasElem[0].addEventListener('mousemove', window_onMouseMove, false);
+        $threejsCanvasElem[0].addEventListener('mouseup', window_onMouseUp, false);
+    }
+
+    function setupStats() {
+
+        //create a stats monitor for rendering
+        renderStats = new Stats();
+        $('body').append(renderStats.domElement);
+
+        //create a stats monitor for Physijs
+        physijsStats = new Stats();
+        $('body').append(physijsStats.domElement);
+        physijsStats.domElement.style.position = 'absolute';
+        physijsStats.domElement.style.left = '0px';
+        physijsStats.domElement.style.top = '50px';
+
+        // NOVO: ocultar se flag ativada
+        if (HIDE_STATS) {
+            renderStats.domElement.style.display = 'none';
+            physijsStats.domElement.style.display = 'none';
+        }
+    }
+
+    var gui;
+    var terrainFolder, sculptFolder, waterFolder, objectsFolder, renderingFolder, debugFolder;
+    function setupGui() {
+
+        gui = new dat.GUI({ width: 300 });
+
+        // Terrain (mantido internamente, mas OCULTO)
+        var control;
+        terrainFolder = gui.addFolder('Terrain');
+        control = terrainFolder.add(options, 'terrainImage', terrainImages).name('Image').listen();
+        control.onChange(function (value) {
+            loadTerrainImage(value);
+            options.terrainImage = value;
+            options.terrainMidGreyIsLowest = terrainImageSettings[value].midGreyIsLowest;
+        });
+        terrainFolder.add(options, 'terrainMidGreyIsLowest');
+        // Ocultar visualmente o folder Terrain
+        terrainFolder.close();
+        terrainFolder.domElement.parentNode.style.display = 'none';
+
+        // Meteor
+        var meteorFolder = gui.addFolder('Meteor');
+        meteorFolder.open();
+        meteorFolder.add(options, 'meteorSizeKm', 0, 0.25).step(0.01).name('Meteor Size (km)').onChange(function(){
+            _updateMeteorParamsFromSize();
+        });
+    }
+
+    // ===== Adicionar utilitário (coloque antes de setupGui) =====
+    // ==== REESCALA SUAVE (força e raio menores) ====
+    function _updateMeteorParamsFromSize() {
+        var MAX_SIZE = 0.25;   // antes 0.50
+        var raw = options.meteorSizeKm;
+        if (raw < 0) raw = 0;
+        if (raw > MAX_SIZE) raw = MAX_SIZE;
+        options.meteorSizeKm = raw;
+        var t = raw / MAX_SIZE;
+
+        // Mantidas as faixas (ajuste se quiser suavizar mais)
+        var MIN_STRENGTH = 0.015, MAX_STRENGTH = 0.35;
+        var MIN_RADIUS   = 0.12,  MAX_RADIUS   = 0.85;
+
+        options.meteorImpactStrength = MIN_STRENGTH + (MAX_STRENGTH - MIN_STRENGTH) * t;
+        options.meteorImpactRadius   = MIN_RADIUS   + (MAX_RADIUS   - MIN_RADIUS)   * t;
+    }
+
+    // Inicializa parâmetros derivados logo após definir options
+    _updateMeteorParamsFromSize();
+
+    var dWaterVol;
+    $(document).ready(function () {
+
+        //check for WebGL
+        checkWebGl();
+
+        console.log('Document is ready.');
+
+        $threejsContainerElem = $('#threejs-container');
+        $canvasContainerElem = $('#canvas-container');
+
+        //setup main scene
+        setupMainScene();
+
+        //setup Skulpt
+        setupSkulpt();
+
+        //setup terrain image
+        prepareTerrainImageElements();
+        loadTerrainImage(options.terrainImage);
+
+        //setup water
+        setupWater();
+
+        //setup events
+        setupEvents();
+
+        //setup stats monitor
+        setupStats();
+
+        //setup GUI
+        setupGui();
+
+        //start Physijs sim
+        scene.simulate();
+
+        //main loop
+        function loop() {
+
+            var dt = clock.getDelta();  //have to call this before getElapsedTime()
+            var time = clock.getElapsedTime();
+
+            //update and render
+            renderer.autoClear = false;
+            renderer.clear();
+            gpuSkulpt.update(dt);
+            gpuWater.update(dt);
+            renderer.render(scene, camera);
+
+            controls.update();
+            renderStats.update();
+
+            //NÃO change water height based on flood levels - comentar esta linha
+            // dWaterVol = options.waterFloodVolRate * dt;
+            // gpuWater.flood(dWaterVol);
+
+            requestAnimationFrame(loop);
+        }
+        loop();
+    });
+    </script>
+</head>
+<body>
+    <div id="threejs-container"></div>
+    <div class="translucent" id="info-container">
+        <div>Camera: [ Alt + Mouse ]</div>
+        <div>Waves: [ Left Mouse: impact ] [ Shift + Left Mouse: directional wave ]</div>
+    </div>
+</body>
+</html>
