@@ -5,12 +5,7 @@
   <title>Impactor-2025 Mitigation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Chart.js (UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <!-- dat.GUI -->
-  <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
-
-          <!-- Google tag (gtag.js) -->
+            <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2NRVS8C43B"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -19,6 +14,13 @@
 
   gtag('config', 'G-2NRVS8C43B');
 </script>
+
+  <!-- Chart.js (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- dat.GUI -->
+  <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+
+
   <!-- Import map: resolve "three" no browser -->
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
@@ -218,7 +220,7 @@
     }
 
     // --- Carregamento de texturas com debug e correção de color space ---
-    const texPath = '../Particulas/';
+    const texPath = '../mitigation/Particulas/';
     const texLoader = new THREE.TextureLoader();
     texLoader.setPath(texPath);
 
