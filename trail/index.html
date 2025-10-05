@@ -69,11 +69,26 @@
         <div class="stat-item">FPS: <span class="stat-value" id="currentFPS">60</span></div>
     </div>
 
+    <!-- Áudio de fundo -->
+    <audio id="bg-audio" src="/trail.mp3" loop preload="auto" playsinline></audio>
+
     <script src="https://cdn.jsdelivr.net/npm/three@latest/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@latest/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
 
     <script type="module">
+        // ===== Áudio de fundo =====
+        const bgAudio = document.getElementById('bg-audio');
+        bgAudio.muted = true;          // tenta autoplay em mute (policy friendly)
+        bgAudio.volume = 0.4;
+        bgAudio.play().catch(()=>{});  // ignora erro inicial
+
+        function enableAudio(){
+            bgAudio.muted = false;
+            bgAudio.play().catch(()=>{});
+            window.removeEventListener('pointerdown', enableAudio);
+        }
+        window.addEventListener('pointerdown', enableAudio);
         // ===== Variáveis Globais =====
         let globalParticleCount = 2500;
         let globalTrailSpeed = 0.4;
@@ -343,7 +358,8 @@
             Dispersion: globalDispersionRate,
             Size_km: globalMeteroidSize,
             AutoRotate: globalAutoRotate,
-            Show_Grid: true // novo
+            Show_Grid: true,
+            Music: true
         };
         const gui = new dat.GUI({ width:300 });
         const trilhaFolder = gui.addFolder('Trail');
@@ -363,6 +379,15 @@
             if(window.__gridHelper) window.__gridHelper.visible = v;
         }).name('Grid');
         viewFolder.open();
+
+        const audioFolder = gui.addFolder('Audio');
+        audioFolder.add(options,'Music').onChange(v=>{
+            if(v){
+                enableAudio();
+            }else{
+                bgAudio.pause();
+            }
+        }).name('Background');
     </script>
 </body>
 </html>
