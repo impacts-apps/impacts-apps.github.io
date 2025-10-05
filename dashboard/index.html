@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-
+<!-- removido lil-gui -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2NRVS8C43B"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -130,6 +130,7 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
 
 <!-- canvas do fundo -->
 <canvas id="space-bg" aria-hidden="true"></canvas>
+<audio id="dash-audio" src="dashboard.mp3" preload="auto" loop></audio>
 
 <div class="now-showing">Impacts — Dashboard</div>
 
@@ -602,6 +603,33 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
   });
 
   resize(); lastSpawn = performance.now(); requestAnimationFrame(stepAndPaint);
+})();
+</script>
+
+<script>
+/* === ÁUDIO + GUI === */
+(() => {
+  const audio = document.getElementById('dash-audio');
+  audio.volume = 0.9;
+
+  function tryPlay(){
+    audio.play().catch(()=> {
+      // permanece aguardando interação
+    });
+  }
+
+  // tentativa inicial (alguns navegadores permitem se não estiver mudo)
+  document.addEventListener('DOMContentLoaded', () => {
+    tryPlay();
+  });
+
+  // primeira interação do usuário
+  const once = () => {
+    tryPlay();
+    events.forEach(e => window.removeEventListener(e, once));
+  };
+  const events = ['click','pointerdown','touchstart','keydown'];
+  events.forEach(e => window.addEventListener(e, once, { once:true }));
 })();
 </script>
 </body>

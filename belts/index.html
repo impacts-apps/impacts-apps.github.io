@@ -38,6 +38,9 @@
 <body>
   <main id="scene" aria-label="Looking for Asteroids 3D canvas"></main>
 
+  <!-- Audio ambiente (oculto) -->
+  <audio id="bgAudio" src="belts.wav" loop preload="auto" style="display:none"></audio>
+
   <!-- Caixa informativa -->
   <section class="info" role="status" aria-live="polite">
     <div class="live">SELEÇÃO</div>
@@ -346,7 +349,8 @@ renderer.domElement.addEventListener
     const guiState = {
       view:   { cameraMode: 'Orbit (persp)', asteroidSize: 1.00, spinSpeed: 0.0, showOrbits: true }, // Spin 0 = foto fixa
       layers: { Belt: true, Trojans: true, Kuiper: true, Lucy: true },
-      lucy:   { speed: 1.0, progress: 0.0 }
+      lucy:   { speed: 1.0, progress: 0.0 },
+      audio:  { enabled: true }   // <<< NOVO
     };
 
     const fView = gui.addFolder('View');
@@ -367,6 +371,34 @@ renderer.domElement.addEventListener
     fLucy.add(guiState.lucy, 'speed', 0.2, 3.0, 0.05).name('Velocidade');
     fLucy.add(guiState.lucy, 'progress', 0, 1, 0.001).name('Progresso 0..1').onChange(v => { lucyT = v; });
     fLucy.open();
+
+    // ==== AUDIO (NOVO) ====
+    const bgAudio = document.getElementById('bgAudio');
+    bgAudio.volume = 0.6;
+    function tryPlayAudio(){
+      if(!guiState.audio.enabled) return;
+      bgAudio.play().catch(()=>{
+        console.log('Autoplay bloqueado; aguardando interação do usuário.');
+        const resume = () => {
+          bgAudio.play().catch(()=>{});
+        };
+        // Toca na primeira interação
+        window.addEventListener('pointerdown', resume, { once:true });
+        window.addEventListener('keydown', resume, { once:true });
+      });
+    }
+    tryPlayAudio();
+
+    const fAudio = gui.addFolder('Audio');
+    fAudio.add(guiState.audio, 'enabled').name('Som ambiente').onChange(v=>{
+      if(v){
+        bgAudio.muted = false;
+        tryPlayAudio();
+      } else {
+        bgAudio.muted = true;
+      }
+    });
+    fAudio.open();
 
     function updatePointSizes(){
       const mult = guiState.view.asteroidSize;
