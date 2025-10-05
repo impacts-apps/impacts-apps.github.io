@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Looking for Asteroids</title>
+
+  <!-- ES modules -->
+  <script async src="https://unpkg.com/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+      "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js",
+      "dat.gui": "https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.module.js"
+    }
+  }
+  </script>
+
+  <style>
+    :root{ --bg:#0b0f13; --fg:#eaf2ff; --muted:#95a2b8; --accent:#24D3FF; }
+    *{ box-sizing:border-box }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:Inter,system-ui,Segoe UI,Roboto,Arial; }
+    #scene{ position:fixed; inset:0; }
+    .info{
+      position:fixed; left:16px; bottom:16px; width:min(420px,94vw);
+      background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35));
+      border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:16px;
+      backdrop-filter: blur(10px); z-index:10;
+    }
+    .info h2{ margin:2px 0 6px; font-weight:800; font-size:18px }
+    .kv{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; margin-top:8px; font-size:13px }
+    .kv div:nth-child(odd){ color:var(--muted) }
+    .live{ font:700 11px/1 Inter, sans-serif; color:var(--accent); letter-spacing:1px }
+    .dg.ac{ z-index:12 !important; }
+  </style>
+</head>
+<body>
+  <main id="scene" aria-label="Looking for Asteroids 3D canvas"></main>
+
+  <!-- Caixa informativa -->
+  <section class="info" role="status" aria-live="polite">
+    <div class="live">SELEÇÃO</div>
+    <h2 id="selTitle">Clique em uma região/asteroide</h2>
+    <div class="kv" id="selGrid">
+      <div>Região</div><div>—</div>
+      <div>Composição típica</div><div>—</div>
+      <div>Tamanho típico</div><div>—</div>
+      <div>Densidade típica</div><div>—</div>
+      <div>Notas</div><div>—</div>
+    </div>
+  </section>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import * as dat from 'dat.gui';
+
+    // =============== CENA ===============
+    const AU = 2.0; // 1 AU = 2 unidades
+    const container = document.getElementById('scene');
+    const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+    renderer.setClearColor(0x0b0f13, 1);
+    const scene = new THREE.Scene();
+    container.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0x223344, 0.75));
+
+    // Sol um pouco menor para deixar espaço visual a Mercúrio
+    const sun = new THREE.Mesh(
+      new THREE.SphereGeometry(0.50, 40, 40),
+      new THREE.MeshBasicMaterial({ color:0xffd06a })
+    );
+    scene.add(sun);
+    scene.add(new THREE.PointLight(0xfff0c1, 2.2, 0, 2));
+
+    // Estrelas
+    (function stars(){
+      const g = new THREE.BufferGeometry();
+      const N = 1800, arr = new Float32Array(N*3);
+      for (let i=0;i<N;i++){
+        const r = 320 + Math.random()*240, th=Math.acos(THREE.MathUtils.randFloatSpread(2)), ph=Math.random()*Math.PI*2;
+        arr[3*i+0]= r*Math.sin(th)*Math.cos(ph);
+        arr[3*i+1]= r*Math.cos(th)*0.25;
+        arr[3*i+2]= r*Math.sin(th)*Math.sin(ph);
+      }
+      g.setAttribute('position', new THREE.BufferAttribute(arr,3));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({
+        size:0.7, color:0xbfd8ff, transparent:true, opacity:0.9, depthWrite:false
+      }));
+      stars.frustumCulled = false;
+      scene.add(stars);
+    })();
+
+    // =============== CÂMERAS ===============
+    const camPersp = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 10000);
+    camPersp.position.set(0, 16, 34);
+    const ctlPersp = new OrbitControls(camPersp, renderer.domElement);
+    ctlPersp.enableDamping = true;
+    ctlPersp.dampingFactor = 0.06;
+    ctlPersp.maxDistance = 800;
+    ctlPersp.minDistance = 2;
+
+    // Ortho (top view)
+    const orthoSize = 24;
+    const camOrtho = new THREE.OrthographicCamera(
+      -orthoSize*camPersp.aspect, orthoSize*camPersp.aspect, orthoSize, -orthoSize, -5000, 5000
+    );
+    camOrtho.position.set(0, 60, 0.0001);
+    camOrtho.up.set(0,0,1);
+    camOrtho.lookAt(0,0,0);
+    const ctlOrtho = new OrbitControls(camOrtho, renderer.domElement);
+    ctlOrtho.enableRotate = false;
+    ctlOrtho.enableDamping = true;
+    ctlOrtho.screenSpacePanning = true;
+    ctlOrtho.zoomSpeed = 1.2;
+
+    let camera = camPersp;
+    let controls = ctlPersp;
+    function setCameraMode(mode){
+      const isTop = (mode === 'Top (ortho)');
+      camera  = isTop ? camOrtho : camPersp;
+      controls = isTop ? ctlOrtho : ctlPersp;
+      updatePointSizes();
+      onResize();
+    }
+
+    // =============== UTILS ===============
+    function makeCircleSprite(size=64) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.9)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
+      const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+    }
+    const roundSprite = makeCircleSprite();
+
+    const circle = (radius) => {
+      const segs = 256, pts = new Float32Array((segs+1)*3);
+      for (let i=0;i<=segs;i++){ const t = i/segs*Math.PI*2; pts[3*i]=radius*Math.cos(t); pts[3*i+1]=0; pts[3*i+2]=radius*Math.sin(t); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pts,3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:.33 }));
+      line.frustumCulled = false;
+      return line;
+    };
+
+    // =============== PLANETAS ===============
+    // 🔧 EDITÁVEL: raio “visual” base por planeta
+    const PLANET_BASE_RADIUS = {
+      'Mercúrio': 0.055,
+      'Vênus':    0.090,
+      'Terra':    0.100,
+      'Marte':    0.085,
+      'Júpiter':  0.210
+    };
+
+    const planets = [
+      { name:'Mercúrio', a:0.39, color:0xbfbfbf },
+      { name:'Vênus',   a:0.72, color:0xf0d69a },
+      { name:'Terra',   a:1.00, color:0x7cc2ff },
+      { name:'Marte',   a:1.52, color:0xff8a66 },
+      { name:'Júpiter', a:5.20, color:0xffdfb5 }
+    ];
+
+    const orbitLines = new THREE.Group(); orbitLines.frustumCulled = false;
+    const planetMeshes = [];
+    // 🔧 EDITÁVEL: multiplicadores de escala (global e por planeta)
+    const planetScaleState = {
+      global: 1.00,
+      'Mercúrio': 1.00, 'Vênus': 1.00, 'Terra': 1.00, 'Marte': 1.00, 'Júpiter': 1.00
+    };
+
+    function createPlanet(p){
+      const mat = new THREE.MeshStandardMaterial({
+        color:p.color, roughness:.55, metalness:.12,
+        emissive: p.name==='Júpiter' ? 0x5a3a00 : 0x000000, emissiveIntensity: p.name==='Júpiter' ? 0.28 : 0.0
+      });
+      const radius = PLANET_BASE_RADIUS[p.name] * planetScaleState[p.name] * planetScaleState.global;
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius,28,28), mat);
+      mesh.position.set(p.a*AU,0,0);
+      mesh.userData = { type:'planet', name:p.name, a:p.a };
+      mesh.frustumCulled = false;
+      return mesh;
+    }
+
+    planets.forEach(p=> {
+      orbitLines.add(circle(p.a*AU));
+      const m = createPlanet(p);
+      planetMeshes.push(m);
+      scene.add(m);
+    });
+
+    function updatePlanetScales(){
+      planetMeshes.forEach(m=>{
+        const name = m.userData.name;
+        const r = PLANET_BASE_RADIUS[name] * planetScaleState[name] * planetScaleState.global;
+        m.geometry.dispose();
+        m.geometry = new THREE.SphereGeometry(r, 28, 28);
+      });
+    }
+
+    // =============== PONTOS (CINTURÕES) ===============
+    function makePointCloud(positions, colorHex, sizePx=2.0, opacity=1.0){
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(positions,3));
+      const m = new THREE.PointsMaterial({
+        size: sizePx,              // em pixels
+        sizeAttenuation: false,    // <<< NÃO muda com a distância
+        color: colorHex,
+        transparent: true,
+        opacity: opacity,
+        map: roundSprite,
+        depthWrite:false,
+        depthTest:false,
+        alphaTest: 0.5
+      });
+      const pts = new THREE.Points(g, m);
+      pts.frustumCulled = false;   // <<< NÃO oculta por frustum/distância
+      pts.renderOrder = 2;
+      return pts;
+    }
+
+    // Cinturão Principal (2.2–3.2 AU)
+    const BELT_COUNT = 2200;
+    const beltPos = new Float32Array(BELT_COUNT*3);
+    for (let i=0;i<BELT_COUNT;i++){
+      const a = THREE.MathUtils.randFloat(2.2,3.2)*AU;
+      const phi = Math.random()*Math.PI*2, y = THREE.MathUtils.randFloatSpread(0.25);
+      beltPos[3*i]=a*Math.cos(phi); beltPos[3*i+1]=y; beltPos[3*i+2]=a*Math.sin(phi);
+    }
+    const belt = makePointCloud(beltPos, 0x9cc3ff, 2.2, 1.0);
+    belt.userData = { region:'Cinturão Principal', comp:'C,S,M', size:'100 m – 500 km', rho:'~1.3–3.5 g/cm³', note:'Entre Marte e Júpiter (~2.2–3.2 AU)' };
+    scene.add(belt);
+
+    // Troianos (±60° de Júpiter)
+    const TROJ_COUNT = 1200;
+    const trojPos = new Float32Array(TROJ_COUNT*3);
+    for (let i=0;i<TROJ_COUNT;i++){
+      const which = Math.random()<0.5 ? +1 : -1;
+      const base = (which>0 ? Math.PI/3 : -Math.PI/3); // ±60°
+      const dphi = THREE.MathUtils.degToRad(THREE.MathUtils.randFloat(-15,15));
+      const r = 5.2*THREE.MathUtils.randFloat(0.92,1.08)*AU;
+      const phi = base + dphi;
+      trojPos[3*i]=r*Math.cos(phi);
+      trojPos[3*i+1]=THREE.MathUtils.randFloatSpread(0.18);
+      trojPos[3*i+2]=r*Math.sin(phi);
+    }
+    const trojans = makePointCloud(trojPos, 0x21ff9d, 2.6, 1.0);
+    trojans.userData = { region:'Troianos de Júpiter', comp:'D/P', size:'100 m – 200 km', rho:'~0.8–2.0 g/cm³', note:'Aglomerados em L4/L5 (±60° de Júpiter)' };
+    scene.add(trojans);
+
+    // Kuiper (30–50 AU) — vermelho e visível
+    const KUIP_COUNT = 2400;
+    const kuipPos = new Float32Array(KUIP_COUNT*3);
+    for (let i=0;i<KUIP_COUNT;i++){
+      const a = THREE.MathUtils.randFloat(30,50)*AU, phi=Math.random()*Math.PI*2;
+      kuipPos[3*i]=a*Math.cos(phi); kuipPos[3*i+1]=THREE.MathUtils.randFloatSpread(1.6); kuipPos[3*i+2]=a*Math.sin(phi);
+    }
+    const kuiper = makePointCloud(kuipPos, 0xff5f6d, 2.6, 1.0);
+    kuiper.userData = { region:'Cinturão de Kuiper', comp:'gelo + rocha', size:'km–1000 km', rho:'~0.5–2.0 g/cm³', note:'Além de Netuno (~30–50 AU)' };
+    scene.add(kuiper);
+
+    // =============== LUCY (trajetória) ===============
+    const lucyPts = [
+      new THREE.Vector3(1*AU, 0, 0),
+      new THREE.Vector3(2.3*AU, 0.5, 0.2),
+      new THREE.Vector3(0.9*AU, -0.4, 0.0),
+      new THREE.Vector3(5.2*AU*Math.cos(Math.PI/3), 0, 5.2*AU*Math.sin(Math.PI/3)),
+      new THREE.Vector3(5.3*AU, 0.5, 0.3),
+      new THREE.Vector3(1.1*AU, -0.8, 0.0),
+      new THREE.Vector3(5.2*AU*Math.cos(-Math.PI/3), 0, 5.2*AU*Math.sin(-Math.PI/3))
+    ];
+    const lucyCurve = new THREE.CatmullRomCurve3(lucyPts, false, 'catmullrom', 0.15);
+    const lucyPath = new THREE.Mesh(
+      new THREE.TubeGeometry(lucyCurve, 800, 0.03, 8, false),
+      new THREE.MeshBasicMaterial({ color:0xf6ad06, transparent:true, opacity:.9 })
+    );
+    lucyPath.frustumCulled = false;
+
+    function makeLucyCraft(){
+      const g = new THREE.Group();
+      const bus = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07,0.07,0.18,16),
+        new THREE.MeshStandardMaterial({ color:0x8c5516, metalness:0.6, roughness:0.3 })
+      );
+      bus.rotation.z = Math.PI/2; g.add(bus);
+      const hga = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12,0.12,0.01,24),
+        new THREE.MeshStandardMaterial({ color:0x333333, emissive:0x111111, roughness:0.7 })
+      );
+      g.add(hga);
+      const panelMat = new THREE.MeshStandardMaterial({ color:0x1d8ff5, emissive:0x0b2d6b, emissiveIntensity:0.35, metalness:0.2, roughness:0.5 });
+      const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.55, 0.28), panelMat);
+      const p2 = p1.clone(); p1.position.set(0, 0.0, 0.23); p2.position.set(0, 0.0, -0.23); g.add(p1,p2);
+      g.add(new THREE.PointLight(0xf6ad06, 0.9, 3)); g.frustumCulled=false;
+      return g;
+    }
+    const lucy = makeLucyCraft(); scene.add(lucy);
+    let lucyT = 0.0;
+
+    // =============== AGRUPAMENTO: TUDO JUNTO ===============
+    const solarGroup = new THREE.Group();
+    scene.add(solarGroup);
+
+    // orientação inicial igual à sua referência (Júpiter “embaixo”)
+    const INITIAL_THETA = -Math.PI/2;
+    solarGroup.rotation.y = INITIAL_THETA;
+
+    // Adiciona conteúdo ao grupo (mantém L4–Júpiter–L5 invariável)
+    solarGroup.add(orbitLines);
+    planetMeshes.forEach(m => solarGroup.add(m));
+
+    const beltGroup = new THREE.Group(); beltGroup.add(belt); beltGroup.frustumCulled=false;
+    const trojGroup = new THREE.Group(); trojGroup.add(trojans); trojGroup.frustumCulled=false;
+    const kuipGroup = new THREE.Group(); kuipGroup.add(kuiper); kuipGroup.frustumCulled=false;
+    solarGroup.add(beltGroup, trojGroup, kuipGroup, lucyPath, lucy);
+
+    // =============== PICKING ===============
+    const raycaster = new THREE.Raycaster(); raycaster.params.Points = { threshold: 0.35 };
+    const pickables = [belt, trojans, kuiper, ...planetMeshes, lucy];
+    const $ = (s)=>document.querySelector(s);
+    const selTitle=$('#selTitle'), selGrid=$('#selGrid');
+
+    function setSelected(title, kv){
+      selTitle.textContent = title;
+      const lines = [
+        ['Região', kv.region ?? '—'],
+        ['Composição típica', kv.comp ?? '—'],
+        ['Tamanho típico', kv.size ?? '—'],
+        ['Densidade típica', kv.rho ?? '—'],
+        ['Notas', kv.note ?? '—']
+      ];
+      selGrid.innerHTML = lines.map(([k,v])=>`<div>${k}</div><div>${v}</div>`).join('');
+    }
+
+renderer.domElement.addEventListener
+
+
+    // =============== GUI ===============
+    const gui = new dat.GUI({ name:'Looking for Asteroids' });
+    const guiState = {
+      view:   { cameraMode: 'Orbit (persp)', asteroidSize: 1.00, spinSpeed: 0.0, showOrbits: true }, // Spin 0 = foto fixa
+      layers: { Belt: true, Trojans: true, Kuiper: true, Lucy: true },
+      lucy:   { speed: 1.0, progress: 0.0 }
+    };
+
+    const fView = gui.addFolder('View');
+    fView.add(guiState.view, 'cameraMode', ['Orbit (persp)','Top (ortho)']).name('Camera').onChange(setCameraMode);
+    fView.add(guiState.view, 'asteroidSize', 0.5, 3.0, 0.05).name('Asteroid size (px)').onChange(()=>updatePointSizes()).setValue(1.5);
+    fView.add(guiState.view, 'spinSpeed', 0.0, 2.0, 0.05).name('Spin speed').setValue(0.5);
+    fView.add(guiState.view, 'showOrbits').name('Planet orbits').onChange(v=> orbitLines.visible=v );
+    fView.open();
+
+    const fLayers = gui.addFolder('Layers');
+    fLayers.add(guiState.layers, 'Belt').onChange(v=> belt.visible=v);
+    fLayers.add(guiState.layers, 'Trojans').onChange(v=> trojans.visible=v);
+    fLayers.add(guiState.layers, 'Kuiper').onChange(v=> kuiper.visible=v);
+    fLayers.add(guiState.layers, 'Lucy').onChange(v=> { lucy.visible=v; lucyPath.visible=v; });
+    fLayers.open();
+
+    const fLucy = gui.addFolder('Lucy (trajetória)');
+    fLucy.add(guiState.lucy, 'speed', 0.2, 3.0, 0.05).name('Velocidade');
+    fLucy.add(guiState.lucy, 'progress', 0, 1, 0.001).name('Progresso 0..1').onChange(v => { lucyT = v; });
+    fLucy.open();
+
+    function updatePointSizes(){
+      const mult = guiState.view.asteroidSize;
+      belt.material.size   = 2.2 * mult;
+      trojans.material.size= 2.6 * mult;
+      kuiper.material.size = 2.6 * mult;
+      belt.material.needsUpdate = trojans.material.needsUpdate = kuiper.material.needsUpdate = true;
+    }
+    updatePointSizes();
+
+    // =============== LOOP ===============
+    function animate(){
+      requestAnimationFrame(animate);
+
+      // gira o SISTEMA INTEIRO mantendo L4–Júpiter–L5
+      const s = 0.0006 * guiState.view.spinSpeed;
+      if (s !== 0) solarGroup.rotation.y += s;
+
+      // Lucy
+      lucyT = (lucyT + 0.00028*guiState.lucy.speed) % 1;
+      const pos = lucyCurve.getPointAt(lucyT);
+      const tangent = lucyCurve.getTangentAt(lucyT).normalize();
+      lucy.position.copy(pos);
+      lucy.lookAt(pos.clone().add(tangent));
+      lucy.rotateX(Math.PI/2);
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // =============== RESIZE ===============
+    function onResize(){
+      const aspect = innerWidth/innerHeight;
+      camPersp.aspect = aspect; camPersp.updateProjectionMatrix();
+
+      camOrtho.left = -orthoSize*aspect; camOrtho.right = orthoSize*aspect;
+      camOrtho.top = orthoSize; camOrtho.bottom = -orthoSize; camOrtho.updateProjectionMatrix();
+
+      renderer.setSize(innerWidth, innerHeight);
+    }
+    addEventListener('resize', onResize);
+
+    // Estado inicial
+    setCameraMode('Orbit (persp)');
+  </script>
+</body>
+</html>
