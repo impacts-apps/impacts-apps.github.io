@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impactor-202 - Tail Particles Simulator</title>
+    <link rel="icon" type="image/png" href="https://impacts.live/favicon.png">
+    <style>
+        body{
+            margin:0;
+            font-family:Arial, sans-serif;
+            background:#0a0a0a;
+            color:#ddd;
+            overflow:hidden;
+        }
+        /* Caixa de info (similar ao skunami) */
+        #info-container{
+            position:fixed;
+            top:8px;
+            left:8px;
+            background:rgba(0,0,0,.35);
+            padding:6px 10px;
+            font-size:12px;
+            line-height:1.3;
+            border:1px solid #1e1e1e;
+            backdrop-filter:blur(3px);
+            z-index:5;
+        }
+        .stats-display{
+            position:fixed;
+            bottom:10px;
+            left:10px;
+            background:rgba(0,0,0,.35);
+            border:1px solid #1e1e1e;
+            padding:6px 10px;
+            font-size:11px;
+            line-height:1.25;
+            min-width:140px;
+            backdrop-filter:blur(3px);
+        }
+        .stat-item{color:#aaa;}
+        .stat-value{color:#4fc3ff;font-weight:600;}
+        canvas{outline:none;}
+        /* Remove estilos antigos do painel custom (apagado) */
+    </style>
+</head>
+<body>
+    <div id="info-container">
+        <div>Camera: [ Mouse + drag ]</div>
+        <div>Zoom: [ Scroll ]</div>
+        <div>Auto rotation: toggle in GUI</div>
+    </div>
+
+    <div class="stats-display">
+        <div class="stat-item">Particles: <span class="stat-value" id="currentParticles">2500</span></div>
+        <div class="stat-item">Speed: <span class="stat-value" id="currentSpeed">0.4</span> km/s</div>
+        <div class="stat-item">Dispersion: <span class="stat-value" id="currentDisp">0.009</span></div>
+        <div class="stat-item">Size: <span class="stat-value" id="currentSize">0.10</span> km</div>
+        <div class="stat-item">FPS: <span class="stat-value" id="currentFPS">60</span></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@latest/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@latest/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+
+    <script type="module">
+        // ===== Variáveis Globais =====
+        let globalParticleCount = 2500;
+        let globalTrailSpeed = 0.4;
+        let globalDispersionRate = 0.009;
+        let globalMeteroidSize = 0.10;
+        let globalAutoRotate = true;
+        let globalSparkles = false; // mantido p/ compatibilidade
+        let globalGlowEffect = true;
+        let globalShowGrid = true; // <-- novo
+
+        // ===== Funções UI =====
+        function updateParticleCount(v){
+            globalParticleCount = parseInt(v);
+            document.getElementById('currentParticles').textContent = globalParticleCount;
+            if(window.reinitializeParticles) window.reinitializeParticles(globalParticleCount);
+        }
+        function updateTrailSpeed(v){
+            globalTrailSpeed = parseFloat(v);
+            document.getElementById('currentSpeed').textContent = v;
+        }
+        function updateDispersionRate(v){
+            globalDispersionRate = parseFloat(v);
+            document.getElementById('currentDisp').textContent = v;
+        }
+        function updateMeteroidSize(v){
+            globalMeteroidSize = parseFloat(v);
+            document.getElementById('currentSize').textContent = v.toFixed(2);
+            if(window.updateAsteroidSize){
+                window.updateAsteroidSize(globalMeteroidSize * 10);
+            }
+        }
+        function updateAutoRotate(v){
+            globalAutoRotate = v;
+            if(window.__orbitControls) window.__orbitControls.autoRotate = v;
+        }
+
+        // ===== Cena =====
+        function init(){
+            let scene = new THREE.Scene();
+            let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.set(20,5,20);
+
+            let renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000);
+            renderer.domElement.style.position='fixed';
+            renderer.domElement.style.inset='0';
+            document.body.appendChild(renderer.domElement);
+
+            let ambient = new THREE.AmbientLight(0xffffff,10);
+            scene.add(ambient);
+
+            let spot = new THREE.SpotLight(0xffffff);
+            spot.position.set(10,20,30);
+            scene.add(spot);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.dampingFactor = .1;
+            controls.autoRotate = globalAutoRotate;
+            window.__orbitControls = controls;
+
+            window.addEventListener('resize',()=>{
+                camera.aspect = window.innerWidth/window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            let cometGroup = new THREE.Group();
+            scene.add(cometGroup);
+
+            // ==== GRID (linhas brancas) ====
+            const grid = new THREE.GridHelper(200, 100, 0xffffff, 0xffffff);
+            grid.material.transparent = true;
+            grid.material.opacity = 0.25;   // ajuste da intensidade
+            grid.position.y = -0.5;
+            scene.add(grid);
+            window.__gridHelper = grid;
+
+            // ===== Meteoro =====
+            let asteroid, particleSystem, particleGeometry, particlePositions, particleColors;
+            let loadCounter=0, totalTextures=4;
+            function createRealisticAsteroidGeometry(radius, detail){
+                const geometry = new THREE.SphereGeometry(radius, detail, detail/2);
+                const vertices = geometry.attributes.position.array;
+                const applyPseudoNoise=(verts,freq,mag)=>{
+                    for(let i=0;i<verts.length;i+=3){
+                        const p=new THREE.Vector3(verts[i],verts[i+1],verts[i+2]);
+                        let d=0;
+                        d+=Math.sin(p.x*freq)*Math.sin(p.y*freq)*Math.sin(p.z*freq);
+                        d+=0.5*Math.sin(p.y*freq*2.1)*Math.sin(p.z*freq*2.1)*Math.sin(p.x*freq*2.1);
+                        d*=mag;
+                        const n=p.clone().normalize();
+                        p.add(n.multiplyScalar(d));
+                        verts[i]=p.x;verts[i+1]=p.y;verts[i+2]=p.z;
+                    }
+                };
+                const addCrater=(verts,center,r,depth)=>{
+                    const r2=r*r;
+                    for(let i=0;i<verts.length;i+=3){
+                        const p=new THREE.Vector3(verts[i],verts[i+1],verts[i+2]);
+                        const distSq=p.distanceToSquared(center);
+                        if(distSq<r2){
+                            const fall=1-distSq/r2;
+                            const smooth=fall*fall*(3-2*fall);
+                            const disp=center.clone().normalize().multiplyScalar(-depth*smooth);
+                            p.add(disp);
+                            verts[i]=p.x;verts[i+1]=p.y;verts[i+2]=p.z;
+                        }
+                    }
+                };
+                applyPseudoNoise(vertices,1.2,radius*0.15);
+                applyPseudoNoise(vertices,2.5,radius*0.05);
+                for(let c=0;c<15;c++){
+                    const theta=Math.random()*Math.PI*2;
+                    const phi=Math.acos(Math.random()*2-1);
+                    const center=new THREE.Vector3(
+                        radius*Math.sin(phi)*Math.cos(theta),
+                        radius*Math.sin(phi)*Math.sin(theta),
+                        radius*Math.cos(phi)
+                    );
+                    const cr=radius*(Math.random()*0.25+0.1);
+                    const cd=cr*(Math.random()*0.5+0.2);
+                    addCrater(vertices,center,cr,cd);
+                }
+                geometry.attributes.position.needsUpdate=true;
+                geometry.computeVertexNormals();
+                return geometry;
+            }
+
+            function checkLoaded(){
+                loadCounter++;
+                if(loadCounter>=totalTextures) createAsteroidMesh();
+            }
+            function createAsteroid(){
+                const loader=new THREE.TextureLoader();
+                const diffuse=loader.load("texture_pbr_20250901.png",checkLoaded,undefined,checkLoaded);
+                const normal =loader.load("texture_pbr_20250901_normal.png",checkLoaded,undefined,checkLoaded);
+                const rough  =loader.load("texture_pbr_20250901_roughness.png",checkLoaded,undefined,checkLoaded);
+                const metal  =loader.load("texture_pbr_20250901_metallic.png",checkLoaded,undefined,checkLoaded);
+                window.asteroidTextures={diffuse,normal,roughness:rough,metallic:metal};
+            }
+            function createAsteroidMesh(){
+                if(!window.asteroidTextures) return;
+                const mat=new THREE.MeshPhongMaterial({
+                    color:0xffffff,
+                    map:window.asteroidTextures.diffuse,
+                    normalMap:window.asteroidTextures.normal,
+                    normalScale:new THREE.Vector2(.8,.8),
+                    shininess:30,
+                    emissive:new THREE.Color(0xffaa00),
+                    emissiveIntensity: globalGlowEffect?0.1:0
+                });
+                const geo=createRealisticAsteroidGeometry(globalMeteroidSize*10,64);
+                asteroid=new THREE.Mesh(geo,mat);
+                cometGroup.add(asteroid);
+            }
+            window.updateAsteroidSize=function(size){
+                if(!asteroid) return;
+                const newGeo=createRealisticAsteroidGeometry(size,64);
+                asteroid.geometry.dispose();
+                asteroid.geometry=newGeo;
+            };
+
+            function initParticleSystem(){
+                if(particleSystem){
+                    cometGroup.remove(particleSystem);
+                    particleGeometry.dispose();
+                }
+                let sphereRadius=1;
+                particleGeometry=new THREE.BufferGeometry();
+                particlePositions=new Float32Array(globalParticleCount*3);
+                particleColors=new Float32Array(globalParticleCount*3);
+                for(let i=0;i<globalParticleCount;i++){
+                    const r=sphereRadius*Math.sqrt(Math.random());
+                    const theta=Math.random()*Math.PI*2;
+                    const phi=Math.acos(2*Math.random()-1);
+                    const x=r*Math.sin(phi)*Math.cos(theta);
+                    const y=r*Math.sin(phi)*Math.sin(theta);
+                    const z=r*Math.cos(phi);
+                    particlePositions[i*3]=x;
+                    particlePositions[i*3+1]=y;
+                    particlePositions[i*3+2]=z;
+                    particleColors[i*3]=1.0;
+                    particleColors[i*3+1]=0.5;
+                    particleColors[i*3+2]=0.2;
+                }
+                particleGeometry.setAttribute('position',new THREE.BufferAttribute(particlePositions,3));
+                particleGeometry.setAttribute('color',new THREE.BufferAttribute(particleColors,3));
+                const mat=new THREE.PointsMaterial({size: globalSparkles?0.15:0.10, vertexColors:true});
+                particleSystem=new THREE.Points(particleGeometry,mat);
+                cometGroup.add(particleSystem);
+            }
+            window.reinitializeParticles = count => {
+                globalParticleCount=count;
+                initParticleSystem();
+            };
+
+            createAsteroid();
+            initParticleSystem();
+
+            // ===== Loop =====
+            let lastTime=0, frameCount=0;
+            function animate(t){
+                requestAnimationFrame(animate);
+                frameCount++;
+                if(t-lastTime>=1000){
+                    document.getElementById('currentFPS').textContent=frameCount;
+                    frameCount=0;
+                    lastTime=t;
+                }
+                if(asteroid){
+                    asteroid.rotation.x+=0.005;
+                    asteroid.rotation.y+=0.01;
+                    asteroid.rotation.z+=0.003;
+                }
+                // Partículas
+                let sphereRadius=1;
+                for(let i=0;i<globalParticleCount;i++){
+                    particlePositions[i*3+2]-=globalTrailSpeed;
+                    if(Math.random()<globalDispersionRate){
+                        particlePositions[i*3]+=(Math.random()*2-1)*sphereRadius*4;
+                        particlePositions[i*3+1]+=(Math.random()*2-1)*sphereRadius*4;
+                    }
+                    if(particlePositions[i*3+2]<-25){
+                        if(Math.random()<0.01){
+                            particlePositions[i*3]=(Math.random()*1.5-.75)*sphereRadius*1.5;
+                            particlePositions[i*3+1]=(Math.random()*1.5-.75)*sphereRadius*1.5;
+                            particlePositions[i*3+2]=(Math.random()*1.5-.75)*sphereRadius*1.5;
+                        }
+                    }
+                    if(Math.random()<0.05){
+                        particlePositions[i*3]+=(Math.random()*2-1)*sphereRadius*2;
+                        particlePositions[i*3+1]+=(Math.random()*2-1)*sphereRadius*2;
+                        particlePositions[i*3+2]+=(Math.random()*2-1)*sphereRadius*2;
+                    }
+                    const dist=Math.sqrt(
+                        particlePositions[i*3]*particlePositions[i*3]+
+                        particlePositions[i*3+1]*particlePositions[i*3+1]+
+                        particlePositions[i*3+2]*particlePositions[i*3+2]
+                    );
+                    if(dist<sphereRadius){
+                        particleColors[i*3]=1;particleColors[i*3+1]=1;particleColors[i*3+2]=1;
+                    }else{
+                        particleColors[i*3]=globalSparkles?Math.random():0;
+                        particleColors[i*3+1]=globalSparkles?Math.random():0;
+                        particleColors[i*3+2]=1;
+                    }
+                    particleGeometry.attributes.color.setXYZ(i,
+                        particleColors[i*3],
+                        particleColors[i*3+1],
+                        particleColors[i*3+2]);
+                }
+                particleGeometry.attributes.position.needsUpdate=true;
+
+                controls.update();
+                renderer.render(scene,camera);
+            }
+            animate();
+        }
+        init();
+
+        // ===== dat.GUI (imitando estilo do outro arquivo) =====
+        const options = {
+            Particles: globalParticleCount,
+            Speed_km_s: globalTrailSpeed,
+            Dispersion: globalDispersionRate,
+            Size_km: globalMeteroidSize,
+            AutoRotate: globalAutoRotate,
+            Show_Grid: true // novo
+        };
+        const gui = new dat.GUI({ width:300 });
+        const trilhaFolder = gui.addFolder('Trail');
+        trilhaFolder.add(options,'Particles',500,5000,1).onChange(updateParticleCount);
+        trilhaFolder.add(options,'Speed_km_s',0.1,1.0,0.1).onChange(updateTrailSpeed).name('Speed (km/s)');
+        trilhaFolder.add(options,'Dispersion',0.001,0.02,0.001).onChange(updateDispersionRate);
+        trilhaFolder.open();
+
+        const meteoroFolder = gui.addFolder('Meteor');
+        meteoroFolder.add(options,'Size_km',0.05,0.50,0.01).onChange(updateMeteroidSize).name('Size (km)');
+        meteoroFolder.add(options,'AutoRotate').onChange(updateAutoRotate).name('Auto Rotate');
+        meteoroFolder.open();
+
+        const viewFolder = gui.addFolder('View');
+        viewFolder.add(options,'Show_Grid').onChange(v=>{
+            globalShowGrid = v;
+            if(window.__gridHelper) window.__gridHelper.visible = v;
+        }).name('Grid');
+        viewFolder.open();
+    </script>
+</body>
+</html>
