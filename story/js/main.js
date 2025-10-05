@@ -355,7 +355,7 @@ class ImpactPhysics {
 // ========== NASA DATA INTEGRATION ==========
 class NASADataIntegration {
     constructor() {
-        this.apiKey = '';
+        this.apiKey = '4fWv0hj9U2Y9yTAcKNT3Whuraw5lMRLSAVrZAyuA';
         this.neoAPI = 'https://api.nasa.gov/neo/rest/v1/';
     }
     
