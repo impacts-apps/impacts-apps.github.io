@@ -89,7 +89,7 @@
   <header>
     <span class="tag">Meteor Madness</span>
    
-    <h1>Impactor-2025(Gravity Tractor & Laser Ablation)</h1>
+    <h1>Impactor-2025 ( Gravity Tractor & Laser Ablation )</h1>
     <p>Rotate the 3D asteroid, activate deflection methods, and view <em>deflection</em> and <em>ablation</em> charts.</p>
   </header>
 
@@ -152,7 +152,7 @@
     starGeo.setAttribute('position', new THREE.BufferAttribute(pts,3));
     scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ size:.4, color:0x9fb8ff, transparent:true, opacity:.75 })));
 
-    // ===== Asteroide (replicando lógica do projeto Particulas) =====
+    // ===== asteroid (replicando lógica do projeto Particulas) =====
     // Gera geometria esférica com ruído + crateras similar à versão Particulas
     function createRealisticAsteroidGeometry(radius, detail){
       const geometry = new THREE.SphereGeometry(radius, detail, Math.max(8, detail/2));
@@ -301,7 +301,7 @@
 
     const BASE_LASER_LEN = 2.2;          // altura original do cilindro (eixo Y antes da rotação)
     const LASER_LEN_FACTOR = 0.58;       // fração do diâmetro em X usada como comprimento do feixe
-    const LASER_SURFACE_INSET = 0.0;     // leve valor positivo empurra ponta um pouco “dentro” do asteroide (ex: 0.002)
+    const LASER_SURFACE_INSET = 0.0;     // leve valor positivo empurra ponta um pouco “dentro” do asteroid (ex: 0.002)
     const TRACTOR_OFFSET_FACTOR = 0.45;  // fração do diâmetro em X para posicionar a nave além da superfície
 
     function getAsteroidExtents(){
@@ -418,20 +418,20 @@
     }
 
     // ===== Folders Parâmetros (GUI ESQUERDA) =====
-    const fAst = guiLeft.addFolder('Asteroide');
-    fAst.add(state.asteroid,'diameter_km',0.05,1.5,0.01).name('Diâmetro (km)').onChange(()=>{ rebuildAsteroid(); updateDash(); });
-    fAst.add(state.asteroid,'density',1200,4500,50).name('Densidade').onChange(updateDash);
-    fAst.add(state.asteroid,'spin_rps',0,0.1,0.005).name('Rotação (rps)');
+    const fAst = guiLeft.addFolder('Asteroid');
+    fAst.add(state.asteroid,'diameter_km',0.05,1.5,0.01).name('Diameter (km)').onChange(()=>{ rebuildAsteroid(); updateDash(); });
+    fAst.add(state.asteroid,'density',1200,4500,50).name('Density').onChange(updateDash);
+    fAst.add(state.asteroid,'spin_rps',0,0.1,0.005).name('Rotation (rps)');
 
     const fL = guiLeft.addFolder('Laser Ablation');
-    fL.add(state.laser,'power_MW',0,10,0.1).name('Potência (MW)').onChange(updateDash);
+    fL.add(state.laser,'power_MW',0,10,0.1).name('Power (MW)').onChange(updateDash);
     fL.add(state.laser,'duty_cycle',0,1,0.05).name('Duty Cycle').onChange(updateDash);
 
     const fT = guiLeft.addFolder('Gravity Tractor');
-    fT.add(state.tractor,'ship_mass_ton',1,80,1).name('Massa nave').onChange(updateDash);
-    fT.add(state.tractor,'standoff_m',50,600,5).name('Distância (m)').onChange(updateDash);
+    fT.add(state.tractor,'ship_mass_ton',1,80,1).name('Ship Mass').onChange(updateDash);
+    fT.add(state.tractor,'standoff_m',50,600,5).name('Distance (m)').onChange(updateDash);
 
-    const fOn = guiLeft.addFolder('Ativos');
+    const fOn = guiLeft.addFolder('Active');
     fOn.add(state.toggles,'laser').name('Laser ON').onChange(v=>{ laser.visible = glow.visible = v; updateDash(); });
     fOn.add(state.toggles,'tractor').name('Tractor ON').onChange(v=>{ ship.visible = tractorLine.visible = v; updateDash(); });
 
@@ -454,42 +454,42 @@
         .forEach(c=>c.updateDisplay());
     }
 
-    // ===== Folders Analíticos (GUI DIREITA) =====
-    const fKPI = guiRight.addFolder('Indicadores');
+    // ===== Analytical Folders (RIGHT GUI) =====
+    const fKPI = guiRight.addFolder('Indicators');
     const kpiLi = document.createElement('li'); kpiLi.className='cr custom-block';
     kpiLi.innerHTML = `
       <div class="kpi-grid">
-        <div class="kpi-item"><span>Desvio estimado (km)</span><b id="kpiDeflection">—</b></div>
-        <div class="kpi-item"><span>Massa perdida (ton)</span><b id="kpiMassLoss">—</b></div>
+      <div class="kpi-item"><span>Estimated deflection (km)</span><b id="kpiDeflection">—</b></div>
+      <div class="kpi-item"><span>Mass lost (ton)</span><b id="kpiMassLoss">—</b></div>
       </div>`;
     fKPI.__ul.appendChild(kpiLi);
 
-    const fIll = guiRight.addFolder('Ilustrações');
+    const fIll = guiRight.addFolder('Illustrations');
     const illLi = document.createElement('li'); illLi.className='cr custom-block';
     illLi.innerHTML = `
       <div class="img-grid">
-        <div class="img-box"><img src="assets/gravity-tractor.png" alt="Gravity Tractor"></div>
-        <div class="img-box"><img src="assets/laser-ablation.png" alt="Laser Ablation"></div>
+      <div class="img-box"><img src="assets/gravity-tractor.png" alt="Gravity Tractor"></div>
+      <div class="img-box"><img src="assets/laser-ablation.png" alt="Laser Ablation"></div>
       </div>
-      <p class="note">Imagens demonstrativas.</p>`;
+      <p class="note">Demonstrative images.</p>`;
     fIll.__ul.appendChild(illLi);
 
-    const fDef = guiRight.addFolder('Gráfico: Deflexão vs Tempo');
+    const fDef = guiRight.addFolder('Chart: Deflection vs Time');
     const defLi = document.createElement('li'); defLi.className='cr custom-block';
     defLi.innerHTML = `
       <div class="legend">
-        <span class="dot laser"></span><span class="note" style="margin:0">Laser</span>
-        <span class="dot tractor"></span><span class="note" style="margin:0">Tractor</span>
+      <span class="dot laser"></span><span class="note" style="margin:0">Laser</span>
+      <span class="dot tractor"></span><span class="note" style="margin:0">Tractor</span>
       </div>
       <div class="chart-box"><canvas id="chartDeflect"></canvas></div>
-      <p class="note">Curvas simplificadas.</p>`;
+      <p class="note">Simplified curves.</p>`;
     fDef.__ul.appendChild(defLi);
 
-    const fAblF = guiRight.addFolder('Gráfico: Ablação vs Tempo');
+    const fAblF = guiRight.addFolder('Chart: Ablation vs Time');
     const ablLi = document.createElement('li'); ablLi.className='cr custom-block';
     ablLi.innerHTML = `
       <div class="chart-box"><canvas id="chartAblation"></canvas></div>
-      <p class="note">Dependente da potência.</p>`;
+      <p class="note">Dependent on power.</p>`;
     fAblF.__ul.appendChild(ablLi);
 
     // Garanta que nenhuma linha anterior está fechando os folders.
