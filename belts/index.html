@@ -369,17 +369,91 @@
     function setSelected(title, kv){
       selTitle.textContent = title;
       const lines = [
-        ['Região', kv.region ?? '—'],
-        ['Composição típica', kv.comp ?? '—'],
-        ['Tamanho típico', kv.size ?? '—'],
-        ['Densidade típica', kv.rho ?? '—'],
-        ['Notas', kv.note ?? '—']
+        ['Region', kv.region ?? '—'],
+        ['Typical composition', kv.comp ?? '—'],
+        ['Typical size', kv.size ?? '—'],
+        ['Typical density', kv.rho ?? '—'],
+        ['Notes', kv.note ?? '—']
       ];
       selGrid.innerHTML = lines.map(([k,v])=>`<div>${k}</div><div>${v}</div>`).join('');
     }
 
-renderer.domElement.addEventListener
+    // ======= FIX: listeners reais + raycast recursivo + thresholds adaptativos =======
+    renderer.domElement.style.touchAction = 'none';
 
+    const ndc = new THREE.Vector2();
+    function getNDC(ev){
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((ev.clientX - r.left) / r.width)  * 2 - 1;
+      ndc.y = -((ev.clientY - r.top)  / r.height) * 2 + 1;
+    }
+
+    function findPickRoot(obj){
+      // Sobe até um dos "pickables" (útil para lucy = Group)
+      let cur = obj;
+      while (cur && !pickables.includes(cur)) cur = cur.parent;
+      return cur ?? obj;
+    }
+
+    function pick(ev){
+      getNDC(ev);
+      raycaster.setFromCamera(ndc, camera);
+
+      // Tenta thresholds crescentes para Points (estável em vários zooms)
+      const thresholds = camera.isPerspectiveCamera ? [0.06, 0.12, 0.2, 0.35] : [0.15, 0.25, 0.35];
+      let hit = null;
+
+      for (const t of thresholds){
+        raycaster.params.Points.threshold = t;
+        const list = raycaster.intersectObjects(pickables, /* recursive */ true);
+        if (list.length){ hit = list[0]; break; }
+      }
+      if (!hit) return;
+
+      const root = findPickRoot(hit.object);
+
+      // Lucy (Group)
+      if (root === lucy){
+        setSelected('Sonda Lucy', {
+          region: 'Lucy (NASA)',
+          comp: '—',
+          size: '—',
+          rho:  '—',
+          note: `Trajectory progress: ${(lucyT*100).toFixed(1)}%`
+        });
+        return;
+      }
+
+      const ud = root.userData || {};
+
+      // Regiões de pontos (Belt/Trojans/Kuiper)
+      if (ud.region){
+        setSelected(ud.region, { region: ud.region, comp: ud.comp, size: ud.size, rho: ud.rho, note: ud.note });
+        return;
+      }
+
+      // Planetas
+      if (ud.type === 'planet'){
+        setSelected(ud.name, {
+          region: ud.name,
+          comp:   'rock/gas',
+          size:   '—',
+          rho:    '—',
+          note:   `Orbit ~${ud.a} AU`
+        });
+        return;
+      }
+    }
+
+    function hover(ev){
+      getNDC(ev);
+      raycaster.setFromCamera(ndc, camera);
+      const list = raycaster.intersectObjects(pickables, true);
+      renderer.domElement.style.cursor = list.length ? 'pointer' : 'default';
+    }
+
+    renderer.domElement.addEventListener('pointerdown', pick);
+    renderer.domElement.addEventListener('pointermove', hover);
 
     // =============== GUI ===============
     const gui = new dat.GUI({ name:'Looking for Asteroids' });
