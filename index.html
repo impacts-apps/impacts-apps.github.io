@@ -503,6 +503,28 @@
             height: 40px;
             transform: scaleX(-1);
         }
+/* === NOVO: Logo Intro === */
+        .intro-logo {
+            display: block;
+    width: 360px;
+    max-width: 60%;
+    height: auto;
+    margin: 0 auto 50px;
+    opacity: 0;
+    animation: fadeInUp 0.9s 0.4s forwards;
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.25));
+    pointer-events: none;
+    user-select: none;
+    top: 210px;
+    right: -10px;
+    position: relative;
+        }
+        @media (max-width: 768px) {
+            .intro-logo {
+                width: 140px;
+                margin-bottom: 40px;
+            }
+        }
 
         /* Canvas dos meteoros */
         #meteors-canvas {
@@ -645,7 +667,7 @@
         <header class="header">
             <nav class="nav">
                 <a href="/" class="logo">
-                    <span href="index.html" class="scramble-hover" data-text="!mpact">Impacts</span>
+                    <span href="index.html" class="scramble-hover" data-text="Impact">Impacts</span>
                 </a>
         
 
@@ -662,10 +684,10 @@
         <main>
             <section class="intro-section">
                 <div class="intro-content">
+                    <img src="logopb.png" alt="Impacts Logo" class="intro-logo">
                     <h2 class="intro-heading">
                         <span class="intro-heading-line">
-                            <span class="scramble-text" data-text="!mpacts">Impacts</span>
-                            
+                            <span class="scramble-text" data-text="Impacts">Impacts</span>
                         </span>
                     </h2>
 
@@ -1033,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    console.log('%c🚀 IMPACT LOADED - Com proteção contra bugs de visibilidade', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+    console.log('%c IMPACT LOADED - Com proteção contra bugs de visibilidade', 'color: #00ff88; font-size: 20px; font-weight: bold;');
 });
 </script>
 
