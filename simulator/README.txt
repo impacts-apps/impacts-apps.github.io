@@ -1,5 +1,5 @@
 
-# Terra (clone do projeto Yuri)
+# Terra ( Yuri)
 
 - Abra `index.html` no navegador (permita acesso a WebGL).
 - Teclas do protótipo original continuam válidas (zoom/água/rotação etc.).
