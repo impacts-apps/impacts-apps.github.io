@@ -48,6 +48,22 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
 }
 .now-showing::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--accent) }
 
+/* Logo fixa abaixo do label */
+.site-logo{
+ position: fixed;
+    top: 30px;
+    left: 35px;
+    height: 150px;
+    width: auto;
+    z-index: 30;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .55));
+    user-select: none;
+}
+@media (max-width:600px){
+  .site-logo{ height:44px; top:50px; }
+}
+
 /* === ACCORDION (estrutura mantida) === */
 .accordion-wrap{ width:min(1280px,95vw); margin:clamp(12px,4vmin,32px) auto; padding-top:48px; }
 .accordion{ display:flex; gap:1em; height:clamp(360px,70vh,720px); transform:skew(5deg); overflow:hidden; }
@@ -134,7 +150,9 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
 
 <div class="now-showing">Impacts — Dashboard</div>
 
+
 <main class="accordion-wrap" aria-label="Main modules">
+  <img class="site-logo" src="logo.png" alt="Impacts logo">
   <div class="accordion">
     <a class="card" href="../story/" aria-label="Open storytelling">
        <video id="bgVideo" autoplay muted loop playsinline>
@@ -220,8 +238,8 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
         <h3 class="title">Damage Mitigations & Defenses</h3>
         <p class="subtitle">From deflection to preparedness</p>
         <div class="specs">
-          <div class="spec-row"><span class="spec-label">Strategies:</span><span class="spec-value"></span></div>
-          <div class="spec-row"><span class="spec-label">Goal:</span><span class="spec-value"></span></div>
+          <div class="spec-row"><span class="spec-label">Strategies:</span><span class="spec-value">Early detection, deflection missions</span></div>
+          <div class="spec-row"><span class="spec-label">Goal:</span><span class="spec-value">Prevent or reduce asteroid impact damage</span></div>
         </div>
         <div class="badges">
           <span class="badge"><i></i><span>Open →</span></span>
@@ -239,8 +257,8 @@ body > *:not(#space-bg){ position:relative; z-index:1; }
         <h3 class="title">Tsunami Impact Simulator</h3>
         <p class="subtitle"></p>
         <div class="specs">
-          <div class="spec-row"><span class="spec-label">Strategies:</span><span class="spec-value"></span></div>
-          <div class="spec-row"><span class="spec-label">Goal:</span><span class="spec-value"></span></div>
+          <div class="spec-row"><span class="spec-label">Strategies:</span><span class="spec-value">Bathymetry-based modeling, wave propagation</span></div>
+          <div class="spec-row"><span class="spec-label">Goal:</span><span class="spec-value">tsunami energy and coastal runup</span></div>
         </div>
         <div class="badges">
           <span class="badge"><i></i><span>Open →</span></span>
