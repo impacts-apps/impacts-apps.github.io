@@ -2251,7 +2251,61 @@
    
 </div>
 
+<!-- AUDIO: reproduz após primeira interação -->
+<audio id="story-audio" src="story.mp3" preload="auto" playsinline loop></audio>
 
+<script>
+// === Story Audio Autoplay após interação do usuário ===
+(function() {
+    const audio = document.getElementById('story-audio');
+    const toggle = document.getElementById('soundToggle');
+    if(!audio) return;
+
+    let started = false;
+    audio.volume = 0.03;
+
+    function tryPlay() {
+        if (started) return;
+        started = true;
+        audio.play().catch(err => {
+            // Se falhar (alguns browsers), aguarda próximo gesto
+            started = false;
+            console.warn('Reprodução adiada:', err);
+        });
+    }
+
+    // Primeira interação global dispara play
+    ['pointerdown','keydown','touchstart'].forEach(ev => {
+        window.addEventListener(ev, tryPlay, { once: true, passive: true });
+    });
+
+    // Toggle mute/unmute
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            if (audio.muted || audio.paused) {
+                audio.muted = false;
+                audio.play().catch(()=>{});
+                toggle.style.opacity = 1;
+            } else {
+                audio.muted = true;
+                toggle.style.opacity = 0.35;
+            }
+        });
+    }
+
+    // Opcional: pausar quando a intro termina (se quiser deixar tocando, remova)
+    const observer = new MutationObserver(() => {
+        const intro = document.getElementById('introContainer');
+        if (!intro) return;
+        if (intro.classList.contains('hidden')) {
+            // continua tocando; comente a próxima linha se NÃO quiser pausar
+            // audio.pause();
+            observer.disconnect();
+        }
+    });
+    observer.observe(document.body, { subtree: true, attributes: true });
+})();
+</script>
 
 <script>
 /* ---------- Intro Scrambler (RANDOM_CHARS) ---------- */

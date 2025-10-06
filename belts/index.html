@@ -33,6 +33,39 @@
     .kv div:nth-child(odd){ color:var(--muted) }
     .live{ font:700 11px/1 Inter, sans-serif; color:var(--accent); letter-spacing:1px }
     .dg.ac{ z-index:12 !important; }
+
+    /* GO TO DASHBOARD button */
+    .go-to-dashboard{
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: #00cfff;
+      color: #000;
+      font-family: monospace, Arial, sans-serif;
+      font-weight: 600;
+      letter-spacing: 1px;
+      border: none;
+      padding: 12px 22px;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      z-index: 2000;
+      text-decoration: none;
+      font-size: 13px;
+      transition: background .2s, transform .2s;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .go-to-dashboard:hover{
+      background:#34dbff;
+      transform:translateY(-2px);
+    }
+    .go-to-dashboard:active{
+      background:#00b4e3;
+      transform:translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -43,16 +76,19 @@
 
   <!-- Caixa informativa -->
   <section class="info" role="status" aria-live="polite">
-    <div class="live">SELEÇÃO</div>
-    <h2 id="selTitle">Clique em uma região/asteroide</h2>
+    <div class="live">SELECTION</div>
+    <h2 id="selTitle">Click on a region/asteroid</h2>
     <div class="kv" id="selGrid">
-      <div>Região</div><div>—</div>
-      <div>Composição típica</div><div>—</div>
-      <div>Tamanho típico</div><div>—</div>
-      <div>Densidade típica</div><div>—</div>
-      <div>Notas</div><div>—</div>
+      <div>Region</div><div>—</div>
+      <div>Typical composition</div><div>—</div>
+      <div>Typical size</div><div>—</div>
+      <div>Typical density</div><div>—</div>
+      <div>Notes</div><div>—</div>
     </div>
   </section>
+
+  <!-- Botão GO TO DASHBOARD -->
+  <a href="../dashboard/" class="go-to-dashboard" aria-label="Ir para o dashboard">GO TO DASHBOARD</a>
 
   <script type="module">
     import * as THREE from 'three';

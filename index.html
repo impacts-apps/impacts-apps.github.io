@@ -710,6 +710,9 @@
         </main>
     </div>
 
+    <!-- Áudio da história -->
+    <audio id="storyAudio" src="story.mp3" preload="auto" loop style="display:none"></audio>
+
     <!-- Botão de debug (remover em produção) -->
     <div class="debug-video" onclick="debugVideo()">Debug Video</div>
 
@@ -799,6 +802,39 @@
             console.log('🎬 Sistema de vídeo iniciado. Pressione D para debug.');
         });
     </script>
+
+    <!-- INÍCIO: Script para tocar story.mp3 após interação -->
+    <script>
+    (function() {
+        const STORY_AUDIO_VOLUME = 0.05; // ajuste aqui o volume (0.0 - 1.0)
+
+        const audio = document.getElementById('storyAudio');
+        if (!audio) return;
+
+        audio.volume = STORY_AUDIO_VOLUME;
+
+        let started = false;
+
+        function tryPlay() {
+            if (started) return;
+            started = true;
+            audio.loop = true;
+            audio.volume = STORY_AUDIO_VOLUME; // garantir volume antes do play
+            audio.play().catch(err => {
+                console.warn('Não pôde iniciar o áudio ainda:', err);
+                started = false;
+            });
+        }
+
+        ['click','pointerdown','touchstart','keydown'].forEach(evt => {
+            window.addEventListener(evt, tryPlay, { passive: true });
+        });
+
+        window.playStoryAudio = tryPlay;
+        window.setStoryAudioVolume = (v) => { audio.volume = Math.max(0, Math.min(1, v)); };
+    })();
+    </script>
+    <!-- FIM: Script áudio -->
 
 <script>
 // ========== TYPEWRITER SCRAMBLE ANIMATION - VERSÃO CORRIGIDA ==========
